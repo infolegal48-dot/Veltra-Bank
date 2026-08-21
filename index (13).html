@@ -1,0 +1,2572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Veltra Bank — Demo</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<style>
+  html, body, #root { height: 100%; }
+  body { margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-type="module" data-presets="react">
+import React, { useState, useEffect, useMemo, useRef } from "https://esm.sh/react@18.3.1";
+import ReactDOM from "https://esm.sh/react-dom@18.3.1/client";
+import {
+  Landmark, Menu, X, ChevronDown, ChevronRight, ArrowRight, ArrowLeft, Lock, ShieldCheck, CreditCard,
+  PiggyBank, Send, Users, FileText, Bell, Settings, LogOut, Search, Download, Eye, EyeOff, Check,
+  CheckCircle2, AlertCircle, Plus, Smartphone, Home, Wallet, ArrowUpRight, ArrowDownLeft, Snowflake,
+  Trash2, Edit2, MessageCircle, Phone, Mail, Clock, MapPin, ChevronLeft, Info, RefreshCw, Upload,
+  FileCheck2, TrendingUp, BarChart3, Building2, GraduationCap, Car, HandCoins, ReceiptText, MoreVertical,
+  Loader2, Zap, Wifi, Droplet, Tv, ShieldAlert, LayoutGrid, KeyRound, History, HelpCircle, ChevronUp
+} from "https://esm.sh/lucide-react@0.383.0?external=react";
+
+/* ============================== FONTS / THEME ============================== */
+const FontImport = () => (
+  <style>{`
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap');
+    .f-display { font-family: 'Space Grotesk', sans-serif; }
+    .f-body { font-family: 'Inter', sans-serif; }
+    .f-mono { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+    .ledger-rule {
+      height: 8px; width: 100%;
+      background-image: linear-gradient(to bottom, transparent 0%, transparent 60%, #cbd5e1 60%, #cbd5e1 100%);
+      background-size: 2px 100%; background-repeat: repeat-x; background-position: left bottom;
+      opacity: 0.7;
+    }
+    .ledger-rule.dark {
+      background-image: linear-gradient(to bottom, transparent 0%, transparent 60%, #475569 60%, #475569 100%);
+    }
+    @keyframes fadeUp { from { opacity:0; transform: translateY(8px);} to {opacity:1; transform:none;} }
+    .fade-up { animation: fadeUp .4s ease both; }
+    @keyframes tick { 0% { opacity: .35 } 50% { opacity: 1 } 100% { opacity: .35 } }
+    .pulse-dot { animation: tick 1.8s ease-in-out infinite; }
+    input:focus, select:focus, textarea:focus, button:focus-visible {
+      outline: 2px solid #0d9488; outline-offset: 2px;
+    }
+  `}</style>
+);
+
+/* ============================== HELPERS ============================== */
+const fmt = (n, currency = "USD") =>
+  new Intl.NumberFormat("en-US", { style: "currency", currency, minimumFractionDigits: 2 }).format(n);
+
+const fmtDate = (iso) =>
+  new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 9)}`;
+
+const refNumber = () => "VLT-" + Math.floor(100000 + Math.random() * 899999);
+
+const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const phoneRe = /^[0-9+()\-\s]{7,16}$/;
+
+function calcAge(dobStr) {
+  if (!dobStr) return 0;
+  const dob = new Date(dobStr);
+  const now = new Date();
+  let age = now.getFullYear() - dob.getFullYear();
+  const m = now.getMonth() - dob.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) age--;
+  return age;
+}
+
+function passwordScore(pw = "") {
+  let score = 0;
+  if (pw.length >= 8) score++;
+  if (/[A-Z]/.test(pw)) score++;
+  if (/[a-z]/.test(pw)) score++;
+  if (/[0-9]/.test(pw)) score++;
+  if (/[^A-Za-z0-9]/.test(pw)) score++;
+  return score; // 0-5
+}
+function passwordLabel(score) {
+  if (score <= 1) return { label: "Very weak", color: "bg-rose-500", text: "text-rose-600" };
+  if (score === 2) return { label: "Weak", color: "bg-orange-500", text: "text-orange-600" };
+  if (score === 3) return { label: "Fair", color: "bg-amber-500", text: "text-amber-600" };
+  if (score === 4) return { label: "Strong", color: "bg-emerald-500", text: "text-emerald-600" };
+  return { label: "Excellent", color: "bg-emerald-600", text: "text-emerald-700" };
+}
+
+function download(filename, text) {
+  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ============================== DEMO DATA ============================== */
+const DEMO_EMAIL = "demo@veltrabank.com";
+const DEMO_PASSWORD = "Demo@1234";
+
+const BILLERS = [
+  { id: "b1", name: "Brightline Electric Co.", icon: Zap },
+  { id: "b2", name: "ClearFlow Water Utility", icon: Droplet },
+  { id: "b3", name: "Orbital Mobile", icon: Wifi },
+  { id: "b4", name: "Vantage Cable & Internet", icon: Tv },
+];
+
+function buildDemoData() {
+  const accounts = [
+    { id: "acc-chk", name: "Everyday Checking", type: "Checking", number: "4821", routingLast: "0091",
+      available: 4820.55, current: 4895.55, currency: "USD" },
+    { id: "acc-sav", name: "Growth Savings", type: "Savings", number: "7734", routingLast: "0091",
+      available: 12480.0, current: 12480.0, currency: "USD", rate: "3.25% APY" },
+    { id: "acc-crd", name: "Veltra Rewards Credit", type: "Credit", number: "2290", routingLast: "—",
+      available: 2687.6, current: -812.4, limit: 3500, currency: "USD" },
+  ];
+
+  const cats = ["Groceries", "Transport", "Dining", "Utilities", "Transfer", "Salary", "Shopping", "Subscriptions"];
+  const merchants = {
+    Groceries: ["Fieldstone Market", "Green Aisle Grocers"],
+    Transport: ["Metro Transit", "Skyline Rideshare"],
+    Dining: ["Basil & Vine", "Corner Bakehouse", "Umi Noodle Bar"],
+    Utilities: ["Brightline Electric Co.", "ClearFlow Water Utility"],
+    Transfer: ["Transfer to Growth Savings", "Transfer from Checking"],
+    Salary: ["Northgate Studios Payroll"],
+    Shopping: ["Harbor & Co.", "Fenwick Outfitters"],
+    Subscriptions: ["Orbital Mobile", "Vantage Cable & Internet", "StreamHouse+"],
+  };
+
+  const transactions = [];
+  let day = new Date();
+  for (let i = 0; i < 26; i++) {
+    const cat = cats[Math.floor(Math.random() * cats.length)];
+    const list = merchants[cat];
+    const merchant = list[Math.floor(Math.random() * list.length)];
+    const isCredit = cat === "Salary" || (cat === "Transfer" && merchant.includes("from"));
+    const amount = cat === "Salary" ? 3200 : +(Math.random() * 140 + 6).toFixed(2);
+    const d = new Date(day);
+    d.setDate(d.getDate() - i * 2 - Math.floor(Math.random() * 2));
+    transactions.push({
+      id: uid("txn"),
+      accountId: i % 5 === 0 ? "acc-sav" : i % 7 === 0 ? "acc-crd" : "acc-chk",
+      date: d.toISOString(),
+      description: merchant,
+      category: cat,
+      amount: isCredit ? amount : -amount,
+      status: i < 2 ? "Pending" : "Posted",
+    });
+  }
+  transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  const beneficiaries = [
+    { id: uid("ben"), name: "Priya Nandan", nickname: "Priya", bank: "Veltra Bank", accountNumber: "9012345678", type: "Internal" },
+    { id: uid("ben"), name: "Marcus Whitfield", nickname: "Marcus (rent)", bank: "Union Harbor Bank", accountNumber: "3345667712", type: "External" },
+    { id: uid("ben"), name: "Sana Okafor", nickname: "Sana", bank: "Cascade Community Bank", accountNumber: "7788112233", type: "External" },
+  ];
+
+  const cards = [
+    { id: uid("card"), kind: "Debit", name: "Veltra Everyday Debit", last4: "4821", expiry: "09/29", status: "Active", limit: 5000, cvv: "482", full: "4000 1234 5678 4821" },
+    { id: uid("card"), kind: "Credit", name: "Veltra Rewards Credit", last4: "2290", expiry: "02/28", status: "Active", limit: 3500, cvv: "119", full: "5241 8890 0043 2290" },
+  ];
+
+  const months = ["Feb 2026", "Mar 2026", "Apr 2026", "May 2026", "Jun 2026", "Jul 2026", "Aug 2026"];
+  const statements = months.flatMap((m) => [
+    { id: uid("stm"), account: "Everyday Checking", period: m },
+    { id: uid("stm"), account: "Growth Savings", period: m },
+  ]);
+
+  const notifications = [
+    { id: uid("ntf"), title: "Payment sent", body: "Your transfer of $180.00 to Marcus Whitfield was completed.", time: "2h ago", read: false, type: "transfer" },
+    { id: uid("ntf"), title: "New sign-in detected", body: "A sign-in was recorded from a new device in Accra, GH.", time: "1d ago", read: false, type: "security" },
+    { id: uid("ntf"), title: "Statement ready", body: "Your July statement for Everyday Checking is ready to view.", time: "3d ago", read: true, type: "statement" },
+    { id: uid("ntf"), title: "Card payment", body: "Veltra Rewards Credit charged $42.10 at Umi Noodle Bar.", time: "4d ago", read: true, type: "card" },
+  ];
+
+  const auditLog = [
+    { id: uid("log"), event: "Signed in successfully", detail: "Chrome on macOS · Accra, GH", time: "Today, 08:12" },
+    { id: uid("log"), event: "Password changed", detail: "Self-service reset", time: "3 weeks ago" },
+    { id: uid("log"), event: "New beneficiary added", detail: "Sana Okafor", time: "1 month ago" },
+    { id: uid("log"), event: "Two-factor authentication enabled", detail: "Authenticator app", time: "2 months ago" },
+  ];
+
+  const sessions = [
+    { id: uid("ses"), device: "Chrome on macOS", location: "Accra, GH", lastActive: "Active now", current: true },
+    { id: uid("ses"), device: "Veltra iOS App", location: "Accra, GH", lastActive: "2 days ago", current: false },
+    { id: uid("ses"), device: "Firefox on Windows", location: "Kumasi, GH", lastActive: "3 weeks ago", current: false },
+  ];
+
+  return {
+    accounts, transactions, beneficiaries, cards, statements, notifications,
+    security: { mfaEnabled: true, auditLog, sessions },
+    requests: [],
+  };
+}
+
+function buildStarterData(profile) {
+  const num = String(Math.floor(1000 + Math.random() * 8999));
+  return {
+    accounts: [
+      { id: "acc-chk", name: "Everyday Checking", type: "Checking", number: num, routingLast: "0091", available: 50, current: 50, currency: "USD" },
+      { id: "acc-sav", name: "Growth Savings", type: "Savings", number: String(Number(num) + 1), routingLast: "0091", available: 0, current: 0, currency: "USD", rate: "3.25% APY" },
+    ],
+    transactions: [
+      { id: uid("txn"), accountId: "acc-chk", date: new Date().toISOString(), description: "Welcome bonus", category: "Bonus", amount: 50, status: "Posted" },
+    ],
+    beneficiaries: [],
+    cards: [
+      { id: uid("card"), kind: "Debit", name: "Veltra Everyday Debit", last4: num.slice(-4).padStart(4, "0"), expiry: "—", status: "Pending Activation", limit: 2000, cvv: "•••", full: `4000 1234 5678 ${num.padStart(4, "0")}` },
+    ],
+    statements: [],
+    notifications: [
+      { id: uid("ntf"), title: "Welcome to Veltra Bank", body: `Hi ${profile.firstName || "there"}, your account is ready. We've added a $50 welcome bonus.`, time: "Just now", read: false, type: "account" },
+    ],
+    security: {
+      mfaEnabled: false,
+      auditLog: [{ id: uid("log"), event: "Account created", detail: "Self-service registration", time: "Just now" }],
+      sessions: [{ id: uid("ses"), device: "This browser", location: "Current location", lastActive: "Active now", current: true }],
+    },
+    requests: [],
+  };
+}
+
+function buildKingsleyData() {
+  const threeYearsAgo = new Date();
+  threeYearsAgo.setFullYear(threeYearsAgo.getFullYear() - 3);
+  return {
+    accounts: [
+      { id: "acc-sav", name: "Growth Savings", type: "Savings", number: "5590", routingLast: "0091",
+        available: 5500000, current: 5500000, currency: "USD", rate: "3.25% APY" },
+    ],
+    transactions: [
+      { id: uid("txn"), accountId: "acc-sav", date: threeYearsAgo.toISOString(), description: "Deposit", category: "Deposit", amount: 5500000, status: "Posted" },
+    ],
+    beneficiaries: [],
+    cards: [],
+    statements: [],
+    notifications: [
+      { id: uid("ntf"), title: "Welcome back", body: "This account has had no activity in over 3 years. Review your details before making a transfer.", time: "Just now", read: false, type: "account" },
+    ],
+    security: {
+      mfaEnabled: false,
+      auditLog: [{ id: uid("log"), event: "Signed in successfully", detail: "Self-service login", time: "Just now" }],
+      sessions: [{ id: uid("ses"), device: "This browser", location: "Current location", lastActive: "Active now", current: true }],
+    },
+    requests: [],
+  };
+}
+
+const FAQS = [
+  { q: "Is Veltra Bank a real financial institution?", a: "No. Veltra Bank is a fictional, original brand built to demonstrate what a modern digital banking platform looks and feels like. No real money moves through this demo, and no real accounts are opened." },
+  { q: "How do I open an account?", a: "Select \"Open an account\" from the homepage, and work through the guided registration: personal details, contact information, identification, account setup, identity verification, and a final review." },
+  { q: "What identification do I need?", a: "You'll be asked for a government-issued ID (passport, national ID, or driver's licence) and basic employment information, matching what regulated banks typically require for Know Your Customer (KYC) checks." },
+  { q: "How does two-factor authentication work?", a: "After entering your password, we send a one-time verification code. In this demo environment the code is shown on screen since no real SMS network is connected." },
+  { q: "Can I use this on my phone?", a: "Yes — the entire platform, including the dashboard, is responsive and designed to work across desktop, tablet, and mobile screens." },
+  { q: "How do transfers and bill payments work?", a: "From your dashboard you can send money between your own accounts, to saved beneficiaries, or pay a preset biller. Internal transfers are instant; external transfers show a small demo fee, matching real-world patterns." },
+  { q: "Is my information safe?", a: "This demo models real security patterns — encrypted-style handling, session management, rate-limited logins, and audit logs — but it is a front-end simulation and should never be used with real personal or financial data." },
+];
+
+/* ============================== SMALL UI ATOMS ============================== */
+const cx = (...c) => c.filter(Boolean).join(" ");
+
+function Btn({ children, variant = "primary", size = "md", className = "", icon: Icon, iconRight, ...props }) {
+  const sizes = { sm: "px-3 py-1.5 text-sm", md: "px-5 py-2.5 text-sm", lg: "px-7 py-3.5 text-base" };
+  const variants = {
+    primary: "bg-teal-600 text-white hover:bg-teal-700 shadow-sm",
+    dark: "bg-slate-900 text-white hover:bg-slate-800 shadow-sm",
+    outline: "border border-slate-300 text-slate-800 hover:bg-slate-50",
+    outlineLight: "border border-white/40 text-white hover:bg-white/10",
+    ghost: "text-slate-700 hover:bg-slate-100",
+    danger: "bg-rose-600 text-white hover:bg-rose-700",
+    subtle: "bg-teal-50 text-teal-700 hover:bg-teal-100",
+  };
+  return (
+    <button
+      className={cx(
+        "inline-flex items-center justify-center gap-2 rounded-lg font-semibold transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+        sizes[size], variants[variant], className
+      )}
+      {...props}
+    >
+      {Icon && !iconRight && <Icon size={16} />}
+      {children}
+      {Icon && iconRight && <Icon size={16} />}
+    </button>
+  );
+}
+
+function Field({ label, error, hint, required, children }) {
+  return (
+    <label className="block">
+      {label && (
+        <span className="mb-1.5 flex items-baseline gap-1 text-sm font-semibold text-slate-700">
+          {label} {required && <span className="text-teal-600">*</span>}
+        </span>
+      )}
+      {children}
+      {hint && !error && <span className="mt-1 block text-xs text-slate-500">{hint}</span>}
+      {error && (
+        <span className="mt-1 flex items-center gap-1 text-xs font-medium text-rose-600">
+          <AlertCircle size={13} /> {error}
+        </span>
+      )}
+    </label>
+  );
+}
+
+const inputCls = (error) =>
+  cx(
+    "w-full rounded-lg border px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 bg-white",
+    error ? "border-rose-400 focus:border-rose-500" : "border-slate-300 focus:border-teal-600"
+  );
+
+function TextInput(props) {
+  const { error, ...rest } = props;
+  return <input className={inputCls(error)} {...rest} />;
+}
+function Select({ error, children, ...rest }) {
+  return (
+    <select className={inputCls(error)} {...rest}>
+      {children}
+    </select>
+  );
+}
+
+function Badge({ children, tone = "slate" }) {
+  const tones = {
+    slate: "bg-slate-100 text-slate-700",
+    green: "bg-emerald-100 text-emerald-700",
+    amber: "bg-amber-100 text-amber-700",
+    rose: "bg-rose-100 text-rose-700",
+    teal: "bg-teal-100 text-teal-700",
+  };
+  return <span className={cx("rounded-full px-2.5 py-0.5 text-xs font-semibold", tones[tone])}>{children}</span>;
+}
+
+function Modal({ open, onClose, title, children, wide }) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-slate-900/60" onClick={onClose} />
+      <div className={cx("relative z-10 max-h-[90vh] w-full overflow-y-auto rounded-2xl bg-white p-6 shadow-2xl fade-up", wide ? "max-w-2xl" : "max-w-md")}>
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="f-display text-lg font-semibold text-slate-900">{title}</h3>
+          <button onClick={onClose} aria-label="Close" className="rounded-full p-1.5 text-slate-500 hover:bg-slate-100">
+            <X size={18} />
+          </button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ToastHost({ toasts }) {
+  return (
+    <div className="pointer-events-none fixed bottom-5 right-5 z-[200] flex flex-col gap-2">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={cx(
+            "pointer-events-auto fade-up flex items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium shadow-lg",
+            t.type === "error" ? "bg-rose-600 text-white" : "bg-slate-900 text-white"
+          )}
+        >
+          {t.type === "error" ? <AlertCircle size={16} /> : <CheckCircle2 size={16} />}
+          {t.msg}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Accordion({ items }) {
+  const [open, setOpen] = useState(null);
+  return (
+    <div className="divide-y divide-slate-200 rounded-2xl border border-slate-200 bg-white">
+      {items.map((it, i) => (
+        <div key={i}>
+          <button
+            className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left"
+            onClick={() => setOpen(open === i ? null : i)}
+            aria-expanded={open === i}
+          >
+            <span className="font-semibold text-slate-900">{it.q}</span>
+            {open === i ? <ChevronUp className="shrink-0 text-teal-600" size={18} /> : <ChevronDown className="shrink-0 text-slate-400" size={18} />}
+          </button>
+          {open === i && <div className="px-5 pb-4 text-sm leading-relaxed text-slate-600">{it.a}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProgressSteps({ steps, current }) {
+  return (
+    <div className="mb-8">
+      <div className="mb-2 flex items-center justify-between text-xs font-semibold text-slate-500">
+        <span>Step {current + 1} of {steps.length}</span>
+        <span>{steps[current]}</span>
+      </div>
+      <div className="flex gap-1.5">
+        {steps.map((s, i) => (
+          <div key={s} className={cx("h-1.5 flex-1 rounded-full", i <= current ? "bg-teal-600" : "bg-slate-200")} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AccountIcon({ type, className }) {
+  const M = { Checking: Wallet, Savings: PiggyBank, Credit: CreditCard }[type] || Wallet;
+  return <M className={className} />;
+}
+
+/* ============================== FLOATING SUPPORT CHAT ============================== */
+function SupportChat({ open, onClose }) {
+  const [messages, setMessages] = useState([
+    { from: "bot", text: "Hi, I'm Vela, Veltra Bank's support assistant. This is a simulated chat for demo purposes — how can I help?" },
+  ]);
+  const [input, setInput] = useState("");
+  const [typing, setTyping] = useState(false);
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, typing]);
+
+  function send() {
+    if (!input.trim()) return;
+    const userMsg = { from: "user", text: input.trim() };
+    setMessages((m) => [...m, userMsg]);
+    setInput("");
+    setTyping(true);
+    setTimeout(() => {
+      const replies = [
+        "Thanks for the details — in a live environment this would route to a specialist. Is there anything else I can note on your case?",
+        "Got it. For account-specific issues, our team typically responds within one business day.",
+        "I've logged that for you. You can also reach us at support@veltrabank.example or call 1-800-555-0130.",
+      ];
+      setTyping(false);
+      setMessages((m) => [...m, { from: "bot", text: replies[Math.floor(Math.random() * replies.length)] }]);
+    }, 900);
+  }
+
+  if (!open) return null;
+  return (
+    <div className="fixed bottom-5 right-5 z-[150] flex h-[28rem] w-80 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl fade-up sm:w-96">
+      <div className="flex items-center justify-between bg-slate-900 px-4 py-3 text-white">
+        <div className="flex items-center gap-2">
+          <MessageCircle size={18} className="text-teal-400" />
+          <div>
+            <p className="text-sm font-semibold">Veltra Support</p>
+            <p className="text-[11px] text-slate-300">Typically replies in a few minutes</p>
+          </div>
+        </div>
+        <button onClick={onClose} className="rounded-full p-1 hover:bg-white/10"><X size={16} /></button>
+      </div>
+      <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 p-3">
+        {messages.map((m, i) => (
+          <div key={i} className={cx("flex", m.from === "user" ? "justify-end" : "justify-start")}>
+            <div className={cx("max-w-[85%] rounded-2xl px-3 py-2 text-sm", m.from === "user" ? "bg-teal-600 text-white" : "bg-white border border-slate-200 text-slate-700")}>
+              {m.text}
+            </div>
+          </div>
+        ))}
+        {typing && <div className="text-xs text-slate-400 pulse-dot">Vela is typing…</div>}
+        <div ref={endRef} />
+      </div>
+      <div className="flex gap-2 border-t border-slate-200 p-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && send()}
+          placeholder="Type a message…"
+          className="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm"
+        />
+        <Btn size="sm" onClick={send}>Send</Btn>
+      </div>
+    </div>
+  );
+}
+
+/* ============================== NAVBAR ============================== */
+function Logo({ dark }) {
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 text-white">
+        <Landmark size={19} />
+      </div>
+      <span className={cx("f-display text-lg font-bold tracking-tight", dark ? "text-white" : "text-slate-900")}>
+        Veltra <span className="text-teal-600">Bank</span>
+      </span>
+    </div>
+  );
+}
+
+const NAV_LINKS = [
+  { label: "Personal", href: "#personal" },
+  { label: "Business", href: "#business" },
+  { label: "Accounts", href: "#accounts" },
+  { label: "Cards", href: "#cards" },
+  { label: "Loans", href: "#loans" },
+  { label: "Support", href: "#support" },
+];
+
+function NavBar({ goto, onNavClick, scrollTo }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/90 backdrop-blur">
+      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6">
+        <button onClick={() => goto("home")} aria-label="Veltra Bank home"><Logo /></button>
+        <nav className="hidden items-center gap-7 lg:flex">
+          {NAV_LINKS.map((l) => (
+            <button key={l.label} onClick={() => onNavClick(l.href)} className="text-sm font-semibold text-slate-600 hover:text-teal-700">
+              {l.label}
+            </button>
+          ))}
+        </nav>
+        <div className="hidden items-center gap-3 lg:flex">
+          <Btn variant="ghost" onClick={() => goto("login")}>Log in</Btn>
+          <Btn variant="primary" icon={ArrowRight} iconRight onClick={() => goto("register")}>Open an account</Btn>
+        </div>
+        <button className="rounded-lg p-2 lg:hidden" onClick={() => setOpen((o) => !o)} aria-label="Toggle menu">
+          {open ? <X size={22} /> : <Menu size={22} />}
+        </button>
+      </div>
+      {open && (
+        <div className="border-t border-slate-200 bg-white px-4 py-4 lg:hidden">
+          <div className="flex flex-col gap-1">
+            {NAV_LINKS.map((l) => (
+              <button
+                key={l.label}
+                onClick={() => { onNavClick(l.href); setOpen(false); }}
+                className="rounded-lg px-3 py-2.5 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                {l.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-3 flex flex-col gap-2 border-t border-slate-100 pt-3">
+            <Btn variant="outline" onClick={() => { goto("login"); setOpen(false); }}>Log in</Btn>
+            <Btn variant="primary" onClick={() => { goto("register"); setOpen(false); }}>Open an account</Btn>
+          </div>
+        </div>
+      )}
+    </header>
+  );
+}
+
+function DemoBanner() {
+  return (
+    <div className="bg-slate-900 px-4 py-2 text-center text-xs font-medium text-slate-300">
+      Demo
+    </div>
+  );
+}
+
+/* ============================== HOMEPAGE SECTIONS ============================== */
+function Hero({ goto }) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setTick((n) => n + 1), 2200);
+    return () => clearInterval(t);
+  }, []);
+  const balances = [18402.55, 18402.55, 18447.1, 18447.1, 18391.8];
+  return (
+    <section className="relative overflow-hidden bg-slate-950 text-white">
+      <div className="mx-auto grid max-w-7xl gap-12 px-4 py-16 sm:px-6 lg:grid-cols-2 lg:py-24">
+        <div className="flex flex-col justify-center">
+          <span className="mb-4 inline-flex w-fit items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-teal-300">
+            <ShieldCheck size={14} /> Bank-grade security, redesigned for people
+          </span>
+          <h1 className="f-display text-4xl font-bold leading-tight sm:text-5xl">
+            Every cedi, dollar, and decision — <span className="text-teal-400">in full view.</span>
+          </h1>
+          <p className="mt-5 max-w-lg text-slate-300">
+            Veltra Bank brings your accounts, cards, transfers, and statements into one clear ledger. Open an
+            account in minutes, and manage every move from a dashboard built like an actual bank runs — not a mockup.
+          </p>
+          <div className="mt-8 flex flex-wrap gap-3">
+            <Btn size="lg" onClick={() => goto("register")} icon={ArrowRight} iconRight>Open an account</Btn>
+            <Btn size="lg" variant="outlineLight" onClick={() => goto("login")} icon={Lock}>Log in</Btn>
+          </div>
+          <div className="ledger-rule dark mt-10" />
+          <div className="mt-6 grid grid-cols-3 gap-6 text-sm text-slate-400">
+            <div><p className="f-mono text-xl font-semibold text-white">128k+</p>Simulated demo accounts</div>
+            <div><p className="f-mono text-xl font-semibold text-white">24/7</p>Fraud monitoring &amp; alerts</div>
+            <div><p className="f-mono text-xl font-semibold text-white">3.25%</p>Growth Savings APY</div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center">
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-gradient-to-br from-slate-800 to-slate-900 p-6 shadow-2xl">
+            <div className="flex items-center justify-between text-slate-300">
+              <span className="text-xs font-semibold uppercase tracking-wide">Everyday Checking</span>
+              <Landmark size={18} className="text-teal-400" />
+            </div>
+            <p className="mt-6 text-xs text-slate-400">Available balance</p>
+            <p className="f-mono text-4xl font-semibold text-white transition-all">{fmt(balances[tick % balances.length])}</p>
+            <div className="mt-6 flex items-center justify-between text-xs text-slate-400">
+              <span>•••• •••• •••• 4821</span>
+              <span className="pulse-dot flex items-center gap-1 text-teal-400"><span className="h-1.5 w-1.5 rounded-full bg-teal-400" />Live demo</span>
+            </div>
+            <div className="mt-6 space-y-2 border-t border-white/10 pt-4">
+              {[
+                { d: "Basil & Vine", a: -28.4 },
+                { d: "Northgate Studios Payroll", a: 3200 },
+                { d: "Transfer to Growth Savings", a: -500 },
+              ].map((r, i) => (
+                <div key={i} className="flex items-center justify-between text-sm">
+                  <span className="text-slate-300">{r.d}</span>
+                  <span className={cx("f-mono font-medium", r.a > 0 ? "text-emerald-400" : "text-slate-400")}>
+                    {r.a > 0 ? "+" : ""}{fmt(r.a)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function SectionHeading({ eyebrow, title, sub, center }) {
+  return (
+    <div className={cx("mb-10 max-w-2xl", center && "mx-auto text-center")}>
+      {eyebrow && <p className="mb-2 text-xs font-bold uppercase tracking-wider text-teal-600">{eyebrow}</p>}
+      <h2 className="f-display text-3xl font-bold text-slate-900 sm:text-4xl">{title}</h2>
+      {sub && <p className="mt-3 text-slate-600">{sub}</p>}
+    </div>
+  );
+}
+
+function PersonalBanking({ openInfo }) {
+  const items = [
+    { icon: Wallet, title: "Everyday Checking", desc: "No monthly fee with one deposit a month, and a debit card that ships in days.", tag: "$0/mo" },
+    { icon: PiggyBank, title: "Growth Savings", desc: "Automated round-ups and goal buckets that actually earn a competitive rate.", tag: "3.25% APY" },
+    { icon: CreditCard, title: "Rewards Credit", desc: "Flat cash back with no rotating categories to track, and instant lock controls.", tag: "2% cash back" },
+    { icon: HandCoins, title: "Personal Loans", desc: "Fixed monthly payments and a rate you can see before you apply.", tag: "From 7.9% APR" },
+  ];
+  return (
+    <section id="personal" className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+      <SectionHeading eyebrow="Personal banking" title="Built around how people actually spend and save" sub="Four core products, each designed to be understood in under a minute." />
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {items.map((it) => (
+          <button key={it.title} onClick={() => openInfo(it.title)} className="group flex flex-col rounded-2xl border border-slate-200 bg-white p-6 text-left shadow-sm transition hover:-translate-y-1 hover:shadow-md">
+            <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-teal-50 text-teal-700"><it.icon size={20} /></div>
+            <h3 className="f-display font-semibold text-slate-900">{it.title}</h3>
+            <p className="mt-2 text-sm text-slate-600">{it.desc}</p>
+            <div className="mt-4 flex items-center justify-between">
+              <Badge tone="teal">{it.tag}</Badge>
+              <span className="flex items-center gap-1 text-sm font-semibold text-teal-700 group-hover:gap-2 transition-all">Learn more <ChevronRight size={14} /></span>
+            </div>
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BusinessBanking({ scrollTo }) {
+  const items = [
+    { icon: Building2, title: "Business Checking", desc: "Multi-user access, expense categorisation, and same-day ACH." },
+    { icon: HandCoins, title: "Business Financing", desc: "Working-capital lines and equipment loans sized to your revenue." },
+    { icon: ReceiptText, title: "Merchant Payments", desc: "Accept cards and transfers with settlement you can track daily." },
+  ];
+  return (
+    <section id="business" className="bg-slate-50">
+      <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+        <SectionHeading eyebrow="Business banking" title="Run your business finances without the back office" sub="Built for founders and finance teams who need clarity, not spreadsheets." />
+        <div className="grid gap-5 md:grid-cols-3">
+          {items.map((it) => (
+            <div key={it.title} className="rounded-2xl border border-slate-200 bg-white p-6">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white"><it.icon size={20} /></div>
+              <h3 className="f-display font-semibold text-slate-900">{it.title}</h3>
+              <p className="mt-2 text-sm text-slate-600">{it.desc}</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-8">
+          <Btn variant="dark" onClick={() => scrollTo("#contact")} icon={ArrowRight} iconRight>Talk to business banking</Btn>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function AccountsSection({ goto }) {
+  const rows = [
+    { name: "Everyday Checking", fee: "$0/mo", min: "$0", interest: "—", perk: "Free debit card" },
+    { name: "Growth Savings", fee: "$0/mo", min: "$0", interest: "3.25% APY", perk: "Goal buckets" },
+    { name: "Premium Checking", fee: "$12/mo (waived at $2,500 balance)", min: "$0", interest: "0.50% APY", perk: "No ATM fees worldwide" },
+  ];
+  return (
+    <section id="accounts" className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+      <SectionHeading eyebrow="Accounts & savings" title="Compare accounts side by side" sub="Transparent fees and rates, listed the way they'll appear on your statement." />
+      <div className="overflow-x-auto rounded-2xl border border-slate-200">
+        <table className="w-full min-w-[640px] text-left text-sm">
+          <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th className="px-5 py-3">Account</th>
+              <th className="px-5 py-3">Monthly fee</th>
+              <th className="px-5 py-3">Minimum balance</th>
+              <th className="px-5 py-3">Interest</th>
+              <th className="px-5 py-3">Highlight</th>
+              <th className="px-5 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {rows.map((r) => (
+              <tr key={r.name}>
+                <td className="px-5 py-4 font-semibold text-slate-900">{r.name}</td>
+                <td className="px-5 py-4 text-slate-600">{r.fee}</td>
+                <td className="px-5 py-4 text-slate-600">{r.min}</td>
+                <td className="px-5 py-4 text-slate-600">{r.interest}</td>
+                <td className="px-5 py-4 text-slate-600">{r.perk}</td>
+                <td className="px-5 py-4">
+                  <Btn size="sm" variant="subtle" onClick={() => goto("register")}>Open this account</Btn>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function LoansSection({ requireAuth }) {
+  const [openCalc, setOpenCalc] = useState(null);
+  const products = [
+    { icon: HandCoins, name: "Personal Loan", rate: "7.9%–18.9% APR", detail: "$1,000–$35,000, fixed monthly payments." },
+    { icon: Car, name: "Auto Loan", rate: "5.4%–11.9% APR", detail: "New and used vehicles, up to 6-year terms." },
+    { icon: Home, name: "Home Loan", rate: "6.2%–7.6% APR", detail: "Purchase or refinance, 15–30 year terms." },
+    { icon: GraduationCap, name: "Education Loan", rate: "4.9%–9.9% APR", detail: "Tuition and living costs with grace periods." },
+  ];
+  return (
+    <section id="loans" className="bg-slate-50">
+      <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+        <SectionHeading eyebrow="Loans & financing" title="See your estimated rate before you apply" sub="Every product includes an instant, no-commitment pre-qualification check." />
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          {products.map((p) => (
+            <div key={p.name} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-amber-50 text-amber-700"><p.icon size={20} /></div>
+              <h3 className="f-display font-semibold text-slate-900">{p.name}</h3>
+              <p className="mt-1 text-xs font-semibold text-teal-700">{p.rate}</p>
+              <p className="mt-2 text-sm text-slate-600">{p.detail}</p>
+              <Btn size="sm" variant="outline" className="mt-4" onClick={() => setOpenCalc(p.name)}>Check eligibility</Btn>
+            </div>
+          ))}
+        </div>
+      </div>
+      <LoanCalcModal open={!!openCalc} name={openCalc} onClose={() => setOpenCalc(null)} requireAuth={requireAuth} />
+    </section>
+  );
+}
+
+function LoanCalcModal({ open, name, onClose, requireAuth }) {
+  const [amount, setAmount] = useState(10000);
+  const [income, setIncome] = useState(4000);
+  const [months, setMonths] = useState(36);
+  const rate = 0.109;
+  const monthly = useMemo(() => {
+    const r = rate / 12;
+    return (amount * r) / (1 - Math.pow(1 + r, -months));
+  }, [amount, months]);
+  const affordable = monthly <= income * 0.4;
+  return (
+    <Modal open={open} onClose={onClose} title={`${name || "Loan"} pre-qualification`}>
+      <div className="space-y-5">
+        <Field label={`Loan amount — ${fmt(amount)}`}>
+          <input type="range" min="1000" max="35000" step="500" value={amount} onChange={(e) => setAmount(+e.target.value)} className="w-full accent-teal-600" />
+        </Field>
+        <Field label={`Term — ${months} months`}>
+          <input type="range" min="12" max="72" step="6" value={months} onChange={(e) => setMonths(+e.target.value)} className="w-full accent-teal-600" />
+        </Field>
+        <Field label="Monthly income (before tax)">
+          <TextInput type="number" value={income} onChange={(e) => setIncome(+e.target.value)} />
+        </Field>
+        <div className="rounded-xl bg-slate-50 p-4">
+          <p className="text-xs text-slate-500">Estimated monthly payment at {(rate * 100).toFixed(1)}% APR</p>
+          <p className="f-mono text-2xl font-semibold text-slate-900">{fmt(monthly)}</p>
+          <p className={cx("mt-2 text-xs font-semibold", affordable ? "text-emerald-600" : "text-rose-600")}>
+            {affordable ? "You're likely to pre-qualify based on this estimate." : "This payment is high relative to your income — try a smaller amount or longer term."}
+          </p>
+        </div>
+        <Btn className="w-full" onClick={() => { onClose(); requireAuth("loans"); }}>Continue application</Btn>
+        <p className="text-center text-xs text-slate-400">This is a non-binding, illustrative estimate only.</p>
+      </div>
+    </Modal>
+  );
+}
+
+function CardsSection({ requireAuth }) {
+  const cards = [
+    { name: "Everyday Debit", type: "Debit", desc: "Tap to pay, instant freeze, and fee-free at 40,000+ ATMs.", color: "from-slate-800 to-slate-950" },
+    { name: "Rewards Credit", type: "Credit", desc: "2% flat cash back, no annual fee, and travel protections.", color: "from-teal-700 to-teal-950" },
+    { name: "Secured Credit", type: "Credit", desc: "Build credit history with a refundable security deposit.", color: "from-amber-700 to-amber-950" },
+  ];
+  return (
+    <section id="cards" className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+      <SectionHeading eyebrow="Cards & payments" title="Cards that you control in real time" sub="Freeze, set limits, and view details instantly from your dashboard." />
+      <div className="grid gap-6 md:grid-cols-3">
+        {cards.map((c) => (
+          <div key={c.name} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5">
+            <div className={cx("mb-5 aspect-[1.6/1] rounded-xl bg-gradient-to-br p-5 text-white shadow-inner", c.color)}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-white/80">Veltra {c.type}</span>
+                <Landmark size={16} />
+              </div>
+              <p className="f-mono mt-8 text-sm tracking-widest text-white/90">•••• •••• •••• {Math.floor(1000 + Math.random() * 8999)}</p>
+            </div>
+            <h3 className="f-display font-semibold text-slate-900">{c.name}</h3>
+            <p className="mt-1 text-sm text-slate-600">{c.desc}</p>
+            <Btn size="sm" variant="outline" className="mt-4" onClick={() => requireAuth("cards")}>Apply for this card</Btn>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function TransfersSection({ requireAuth }) {
+  const items = [
+    { icon: Send, title: "Internal transfers", desc: "Move money between your Veltra accounts instantly, any time." },
+    { icon: ArrowUpRight, title: "External transfers", desc: "Send to other banks with tracked status and a transparent fee." },
+    { icon: ReceiptText, title: "Bill payments", desc: "Pay utilities and subscriptions from a saved list of billers." },
+  ];
+  return (
+    <section id="transfers" className="bg-slate-950 text-white">
+      <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+        <div className="mb-10 max-w-2xl">
+          <p className="mb-2 text-xs font-bold uppercase tracking-wider text-teal-400">Transfers & payments</p>
+          <h2 className="f-display text-3xl font-bold sm:text-4xl">Moving money should feel instant and traceable</h2>
+        </div>
+        <div className="grid gap-6 md:grid-cols-3">
+          {items.map((it) => (
+            <div key={it.title} className="rounded-2xl border border-white/10 bg-white/5 p-6">
+              <div className="mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-teal-600/20 text-teal-300"><it.icon size={20} /></div>
+              <h3 className="f-display font-semibold">{it.title}</h3>
+              <p className="mt-2 text-sm text-slate-300">{it.desc}</p>
+            </div>
+          ))}
+        </div>
+        <Btn size="lg" className="mt-8" onClick={() => requireAuth("transfers")} icon={ArrowRight} iconRight>Send money now</Btn>
+      </div>
+    </section>
+  );
+}
+
+function SecurityInfoSection() {
+  const items = [
+    { icon: Lock, title: "Encrypted by design", desc: "Sensitive data patterns are modeled on encryption-in-transit and at-rest practices used by regulated banks." },
+    { icon: Smartphone, title: "Two-factor authentication", desc: "A one-time code is required on every sign-in from an unrecognised device." },
+    { icon: ShieldAlert, title: "Fraud monitoring", desc: "Unusual activity triggers an alert and can pause the account instantly." },
+    { icon: History, title: "Full audit trail", desc: "Every sign-in, transfer, and settings change is logged and reviewable." },
+  ];
+  return (
+    <section id="security" className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+      <SectionHeading eyebrow="Security & privacy" title="Security modeled on real banking practice" sub="This demo simulates these controls in the interface — always avoid entering real personal or financial data." center />
+      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        {items.map((it) => (
+          <div key={it.title} className="rounded-2xl border border-slate-200 p-6 text-center">
+            <div className="mx-auto mb-4 flex h-11 w-11 items-center justify-center rounded-xl bg-slate-900 text-white"><it.icon size={20} /></div>
+            <h3 className="f-display font-semibold text-slate-900">{it.title}</h3>
+            <p className="mt-2 text-sm text-slate-600">{it.desc}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function FAQSection() {
+  return (
+    <section id="faqs" className="bg-slate-50">
+      <div className="mx-auto max-w-3xl px-4 py-20 sm:px-6">
+        <SectionHeading eyebrow="FAQs" title="Common questions" center />
+        <Accordion items={FAQS} />
+      </div>
+    </section>
+  );
+}
+
+function ContactSection({ onSubmit }) {
+  const [form, setForm] = useState({ name: "", email: "", subject: "General question", message: "" });
+  const [errors, setErrors] = useState({});
+  const [sent, setSent] = useState(false);
+
+  function submit(e) {
+    e.preventDefault();
+    const errs = {};
+    if (!form.name.trim()) errs.name = "Enter your name.";
+    if (!emailRe.test(form.email)) errs.email = "Enter a valid email address.";
+    if (form.message.trim().length < 10) errs.message = "Add a few more details (min 10 characters).";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    setSent(true);
+    onSubmit && onSubmit();
+    setForm({ name: "", email: "", subject: "General question", message: "" });
+    setTimeout(() => setSent(false), 4000);
+  }
+
+  return (
+    <section id="contact" className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+      <div className="grid gap-10 lg:grid-cols-2">
+        <div>
+          <SectionHeading eyebrow="Contact" title="Talk to a real person (in the demo, a simulated one)" sub="Reach out with account, loan, or business banking questions." />
+          <div className="space-y-4 text-sm text-slate-700">
+            <div className="flex items-center gap-3"><Phone size={16} className="text-teal-600" /> 1-800-555-0130 (24/7)</div>
+            <div className="flex items-center gap-3"><Mail size={16} className="text-teal-600" /> support@veltrabank.example</div>
+            <div className="flex items-center gap-3"><Clock size={16} className="text-teal-600" /> Live chat available 24/7</div>
+            <div className="flex items-center gap-3"><MapPin size={16} className="text-teal-600" /> 220 Ledger Street, Suite 900 — demo address</div>
+          </div>
+        </div>
+        <form onSubmit={submit} className="rounded-2xl border border-slate-200 bg-white p-6 space-y-4">
+          <Field label="Full name" required error={errors.name}>
+            <TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} placeholder="Jordan Blake" />
+          </Field>
+          <Field label="Email" required error={errors.email}>
+            <TextInput value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} error={errors.email} placeholder="you@example.com" />
+          </Field>
+          <Field label="Subject">
+            <Select value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}>
+              <option>General question</option>
+              <option>Account support</option>
+              <option>Loans & financing</option>
+              <option>Business banking</option>
+              <option>Report an issue</option>
+            </Select>
+          </Field>
+          <Field label="Message" required error={errors.message}>
+            <textarea rows={4} className={inputCls(errors.message)} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="How can we help?" />
+          </Field>
+          <Btn className="w-full" type="submit">Send message</Btn>
+          {sent && <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-600"><CheckCircle2 size={15} /> Message sent — we'll reply within one business day (demo).</p>}
+        </form>
+      </div>
+    </section>
+  );
+}
+
+function Footer({ goto, scrollTo }) {
+  const col = (title, links) => (
+    <div>
+      <p className="f-display mb-3 text-sm font-semibold text-white">{title}</p>
+      <ul className="space-y-2 text-sm text-slate-400">
+        {links.map((l) => (
+          <li key={l}><button onClick={() => scrollTo("#" + l.toLowerCase().replace(/\s+/g, "-"))} className="hover:text-teal-400">{l}</button></li>
+        ))}
+      </ul>
+    </div>
+  );
+  return (
+    <footer className="bg-slate-950 text-white">
+      <div className="mx-auto max-w-7xl px-4 py-14 sm:px-6">
+        <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="lg:col-span-2">
+            <Logo dark />
+            <p className="mt-4 max-w-xs text-sm text-slate-400">A demonstration digital banking platform with original branding — built to show what a modern, production-quality bank experience looks like.</p>
+          </div>
+          {col("Personal", ["Accounts", "Cards", "Loans", "Transfers"])}
+          {col("Company", ["Personal", "Business", "Security", "Faqs"])}
+          {col("Support", ["Support", "Contact", "Faqs"])}
+        </div>
+        <div className="ledger-rule dark my-8" />
+        <div className="flex flex-col items-start justify-between gap-4 text-xs text-slate-500 sm:flex-row sm:items-center">
+          <p>© 2026 Veltra Bank — Demo.</p>
+          <div className="flex gap-4">
+            <button className="hover:text-teal-400">Privacy</button>
+            <button className="hover:text-teal-400">Terms</button>
+            <button onClick={() => goto("login")} className="hover:text-teal-400">Log in</button>
+          </div>
+        </div>
+      </div>
+    </footer>
+  );
+}
+
+function InfoModal({ open, title, onClose, goto }) {
+  const COPY = {
+    "Everyday Checking": "No monthly fee, no minimum balance, and a debit card that ships within days of approval. Includes free bill pay and mobile deposit.",
+    "Growth Savings": "Earn 3.25% APY with automated round-ups on every debit purchase. Create labeled goal buckets for specific savings targets.",
+    "Rewards Credit": "A flat 2% cash back on every purchase, no annual fee, and instant card freeze from your dashboard if it's ever misplaced.",
+    "Personal Loans": "Borrow $1,000–$35,000 with a fixed rate and fixed monthly payment. Check your estimated rate without affecting your credit.",
+  };
+  return (
+    <Modal open={open} onClose={onClose} title={title || ""}>
+      <p className="text-sm leading-relaxed text-slate-600">{COPY[title] || "More information about this product."}</p>
+      <Btn className="mt-5 w-full" onClick={() => { onClose(); goto("register"); }}>Open an account</Btn>
+    </Modal>
+  );
+}
+
+/* ============================== HOMEPAGE ============================== */
+function HomePage({ goto, pushToast, openChat }) {
+  const [infoTitle, setInfoTitle] = useState(null);
+
+  function scrollTo(hash) {
+    const el = document.querySelector(hash);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  function requireAuth(intent) {
+    pushToast(`Log in to continue to ${intent === "loans" ? "your loan application" : intent === "cards" ? "card applications" : "transfers"}.`);
+    goto("login", intent);
+  }
+
+  return (
+    <div>
+      <Hero goto={goto} />
+      <PersonalBanking openInfo={(t) => setInfoTitle(t)} />
+      <BusinessBanking scrollTo={scrollTo} />
+      <AccountsSection goto={goto} />
+      <LoansSection requireAuth={requireAuth} />
+      <CardsSection requireAuth={requireAuth} />
+      <TransfersSection requireAuth={requireAuth} />
+      <SecurityInfoSection />
+      <FAQSection />
+      <section id="support" className="mx-auto max-w-7xl px-4 py-20 sm:px-6">
+        <SectionHeading eyebrow="Customer support" title="Get help however works for you" center />
+        <div className="grid gap-5 sm:grid-cols-3">
+          <div className="rounded-2xl border border-slate-200 p-6 text-center">
+            <Phone className="mx-auto mb-3 text-teal-600" size={22} />
+            <p className="font-semibold text-slate-900">Call us</p>
+            <p className="mt-1 text-sm text-slate-600">1-800-555-0130, 24/7</p>
+          </div>
+          <button onClick={openChat} className="rounded-2xl border border-slate-200 p-6 text-center hover:border-teal-300 hover:bg-teal-50/40">
+            <MessageCircle className="mx-auto mb-3 text-teal-600" size={22} />
+            <p className="font-semibold text-slate-900">Live chat</p>
+            <p className="mt-1 text-sm text-slate-600">Chat with Vela, our support assistant</p>
+          </button>
+          <div className="rounded-2xl border border-slate-200 p-6 text-center">
+            <Mail className="mx-auto mb-3 text-teal-600" size={22} />
+            <p className="font-semibold text-slate-900">Email</p>
+            <p className="mt-1 text-sm text-slate-600">support@veltrabank.example</p>
+          </div>
+        </div>
+      </section>
+      <ContactSection onSubmit={() => pushToast("Message sent — thanks for reaching out.")} />
+      <InfoModal open={!!infoTitle} title={infoTitle} onClose={() => setInfoTitle(null)} goto={goto} />
+    </div>
+  );
+}
+
+/* ============================== LOGIN PAGE ============================== */
+function LoginPage({ goto, users, onSuccess, prefillEmail, pushToast }) {
+  const [email, setEmail] = useState(prefillEmail || "");
+  const [password, setPassword] = useState("");
+  const [showPw, setShowPw] = useState(false);
+  const [errors, setErrors] = useState({});
+  const [stage, setStage] = useState("credentials"); // credentials -> mfa
+  const [attempts, setAttempts] = useState(0);
+  const [lockUntil, setLockUntil] = useState(0);
+  const [now, setNow] = useState(Date.now());
+  const [matchedUser, setMatchedUser] = useState(null);
+  const [code, setCode] = useState(["", "", "", "", "", ""]);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [forgot, setForgot] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const codeRefs = useRef([]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const t = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendCooldown]);
+
+  const locked = now < lockUntil;
+  const lockSecs = Math.max(0, Math.ceil((lockUntil - now) / 1000));
+
+  function submitCreds(e) {
+    e.preventDefault();
+    if (locked) return;
+    const errs = {};
+    if (!emailRe.test(email)) errs.email = "Enter a valid email address.";
+    if (!password) errs.password = "Enter your password.";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+
+    const user = users.find((u) => u.email.toLowerCase() === email.toLowerCase());
+    if (!user || user.password !== password) {
+      const next = attempts + 1;
+      setAttempts(next);
+      if (next >= 3) {
+        setLockUntil(Date.now() + 30000);
+        setErrors({ form: "Too many failed attempts. Try again in 30 seconds." });
+      } else {
+        setErrors({ form: `Incorrect email or password. ${3 - next} attempt(s) remaining.` });
+      }
+      return;
+    }
+    setAttempts(0);
+    setMatchedUser(user);
+    if (user.mfaEnabled) {
+      setStage("mfa");
+      setResendCooldown(30);
+    } else {
+      onSuccess(user);
+    }
+  }
+
+  function submitCode() {
+    const val = code.join("");
+    if (val.length < 6) {
+      setErrors({ mfa: "Enter the 6-digit code." });
+      return;
+    }
+    if (val !== "123456") {
+      setErrors({ mfa: "Incorrect code. Use 123456 for this demo." });
+      return;
+    }
+    onSuccess(matchedUser);
+  }
+
+  function submitForgot(e) {
+    e.preventDefault();
+    if (!emailRe.test(email)) { setErrors({ email: "Enter a valid email address to reset your password." }); return; }
+    setForgotSent(true);
+    pushToast("If that email exists, a reset link has been sent (demo).");
+  }
+
+  return (
+    <div className="grid min-h-[calc(100vh-45px)] lg:grid-cols-2">
+      <div className="hidden flex-col justify-between bg-slate-950 p-10 text-white lg:flex">
+        <button onClick={() => goto("home")}><Logo dark /></button>
+        <div>
+          <h2 className="f-display max-w-sm text-3xl font-bold leading-snug">Welcome back. Your full ledger is one sign-in away.</h2>
+          <div className="ledger-rule dark my-6" />
+          <p className="max-w-sm text-sm text-slate-400">Every sign-in is protected with two-factor verification and logged to your security activity.</p>
+        </div>
+        <p className="text-xs text-slate-500">© 2026 Veltra Bank (demo)</p>
+      </div>
+
+      <div className="flex items-center justify-center p-6 sm:p-10">
+        <div className="w-full max-w-sm">
+          <button onClick={() => goto("home")} className="mb-6 flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800 lg:hidden">
+            <ArrowLeft size={15} /> Back home
+          </button>
+
+          {stage === "credentials" && !forgot && (
+            <>
+              <h1 className="f-display text-2xl font-bold text-slate-900">Log in to Veltra Bank</h1>
+              <p className="mt-1 text-sm text-slate-500">Enter your details to access your dashboard.</p>
+
+              <form onSubmit={submitCreds} className="mt-5 space-y-4">
+                <Field label="Email" required error={errors.email}>
+                  <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email} placeholder="you@example.com" disabled={locked} />
+                </Field>
+                <Field label="Password" required error={errors.password}>
+                  <div className="relative">
+                    <TextInput type={showPw ? "text" : "password"} value={password} onChange={(e) => setPassword(e.target.value)} error={errors.password} placeholder="••••••••" disabled={locked} />
+                    <button type="button" onClick={() => setShowPw((s) => !s)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">
+                      {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
+                </Field>
+                <div className="flex items-center justify-between text-sm">
+                  <label className="flex items-center gap-2 text-slate-600"><input type="checkbox" className="accent-teal-600" /> Remember me</label>
+                  <button type="button" onClick={() => setForgot(true)} className="font-semibold text-teal-700">Forgot password?</button>
+                </div>
+                {errors.form && <p className="flex items-center gap-1.5 text-sm font-medium text-rose-600"><AlertCircle size={14} /> {errors.form}</p>}
+                {locked && <p className="text-sm font-medium text-rose-600">Locked — try again in {lockSecs}s.</p>}
+                <Btn type="submit" className="w-full" disabled={locked}>Log in</Btn>
+              </form>
+              <p className="mt-6 text-center text-sm text-slate-500">
+                New to Veltra? <button onClick={() => goto("register")} className="font-semibold text-teal-700">Create an account</button>
+              </p>
+            </>
+          )}
+
+          {stage === "credentials" && forgot && (
+            <>
+              <button onClick={() => { setForgot(false); setForgotSent(false); }} className="mb-4 flex items-center gap-1.5 text-sm font-semibold text-slate-500"><ArrowLeft size={15} /> Back to log in</button>
+              <h1 className="f-display text-2xl font-bold text-slate-900">Reset your password</h1>
+              <p className="mt-1 text-sm text-slate-500">We'll send a reset link to your email.</p>
+              {!forgotSent ? (
+                <form onSubmit={submitForgot} className="mt-5 space-y-4">
+                  <Field label="Email" required error={errors.email}>
+                    <TextInput type="email" value={email} onChange={(e) => setEmail(e.target.value)} error={errors.email} placeholder="you@example.com" />
+                  </Field>
+                  <Btn type="submit" className="w-full">Send reset link</Btn>
+                </form>
+              ) : (
+                <div className="mt-5 rounded-xl bg-emerald-50 p-4 text-sm text-emerald-800">
+                  <CheckCircle2 className="mb-2" size={18} />
+                  If an account exists for {email}, a reset link has been sent. (Demo — no email is actually sent.)
+                </div>
+              )}
+            </>
+          )}
+
+          {stage === "mfa" && (
+            <>
+              <button onClick={() => setStage("credentials")} className="mb-4 flex items-center gap-1.5 text-sm font-semibold text-slate-500"><ArrowLeft size={15} /> Back</button>
+              <h1 className="f-display text-2xl font-bold text-slate-900">Verify it's you</h1>
+              <p className="mt-1 text-sm text-slate-500">Enter the 6-digit code sent to your registered phone.</p>
+              <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+                Demo mode: use code <span className="f-mono font-semibold">123456</span>.
+              </div>
+              <div className="mt-5 flex gap-2">
+                {code.map((c, i) => (
+                  <input
+                    key={i}
+                    ref={(el) => (codeRefs.current[i] = el)}
+                    value={c}
+                    maxLength={1}
+                    inputMode="numeric"
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, "");
+                      const next = [...code]; next[i] = v; setCode(next);
+                      if (v && codeRefs.current[i + 1]) codeRefs.current[i + 1].focus();
+                    }}
+                    onKeyDown={(e) => { if (e.key === "Backspace" && !code[i] && codeRefs.current[i - 1]) codeRefs.current[i - 1].focus(); }}
+                    className="h-12 w-11 rounded-lg border border-slate-300 text-center text-lg font-semibold focus:border-teal-600"
+                  />
+                ))}
+              </div>
+              {errors.mfa && <p className="mt-2 flex items-center gap-1.5 text-sm font-medium text-rose-600"><AlertCircle size={14} /> {errors.mfa}</p>}
+              <Btn className="mt-5 w-full" onClick={submitCode}>Verify &amp; continue</Btn>
+              <button
+                disabled={resendCooldown > 0}
+                onClick={() => setResendCooldown(30)}
+                className="mt-4 w-full text-center text-sm font-semibold text-teal-700 disabled:text-slate-400"
+              >
+                {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : "Resend code"}
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================== REGISTER PAGE ============================== */
+const REG_STEPS = ["Personal details", "Contact & address", "Identity & employment", "Account setup", "Verify identity", "Review & submit"];
+
+function RegisterPage({ goto, users, setUsers, pushToast }) {
+  const [step, setStep] = useState(0);
+  const [done, setDone] = useState(false);
+  const [refNo, setRefNo] = useState("");
+  const [errors, setErrors] = useState({});
+  const [verifying, setVerifying] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [idFile, setIdFile] = useState("");
+  const [proofFile, setProofFile] = useState("");
+
+  const [f, setF] = useState({
+    firstName: "", lastName: "", dob: "", gender: "Prefer not to say", nationality: "",
+    address: "", city: "", country: "", postalCode: "", phone: "", email: "",
+    idType: "Passport", idNumber: "", occupation: "", employer: "", income: "$2,000–$4,000",
+    sourceOfFunds: "Salary/employment", taxCountry: "", taxId: "",
+    accountType: "Everyday Checking", password: "", confirmPassword: "",
+    terms: false, privacy: false, econsent: false,
+  });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+
+  function validateStep(i) {
+    const e = {};
+    if (i === 0) {
+      if (!f.firstName.trim()) e.firstName = "Required.";
+      if (!f.lastName.trim()) e.lastName = "Required.";
+      if (!f.dob) e.dob = "Required.";
+      else if (calcAge(f.dob) < 18) e.dob = "You must be at least 18 years old.";
+      if (!f.nationality.trim()) e.nationality = "Required.";
+    }
+    if (i === 1) {
+      if (!f.address.trim()) e.address = "Required.";
+      if (!f.city.trim()) e.city = "Required.";
+      if (!f.country.trim()) e.country = "Required.";
+      if (!f.postalCode.trim()) e.postalCode = "Required.";
+      if (!phoneRe.test(f.phone)) e.phone = "Enter a valid phone number.";
+      if (!emailRe.test(f.email)) e.email = "Enter a valid email address.";
+      else if (users.some((u) => u.email.toLowerCase() === f.email.toLowerCase())) e.email = "An account with this email already exists.";
+    }
+    if (i === 2) {
+      if (!f.idNumber.trim()) e.idNumber = "Required.";
+      if (!f.occupation.trim()) e.occupation = "Required.";
+      if (f.occupation.toLowerCase() !== "unemployed" && f.occupation.toLowerCase() !== "student" && !f.employer.trim()) e.employer = "Required for your employment status.";
+      if (!f.taxCountry.trim()) e.taxCountry = "Required.";
+    }
+    if (i === 3) {
+      const ps = passwordScore(f.password);
+      if (ps < 3) e.password = "Choose a stronger password (8+ chars, upper, lower, number).";
+      if (f.password !== f.confirmPassword) e.confirmPassword = "Passwords do not match.";
+    }
+    if (i === 4) {
+      if (!verified) e.verify = "Please complete identity verification before continuing.";
+    }
+    if (i === 5) {
+      if (!f.terms || !f.privacy || !f.econsent) e.terms = "You must accept all agreements to continue.";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  }
+
+  function next() {
+    if (!validateStep(step)) return;
+    if (step === REG_STEPS.length - 1) return submit();
+    setStep((s) => s + 1);
+  }
+  function back() { setErrors({}); setStep((s) => Math.max(0, s - 1)); }
+
+  function runVerification() {
+    if (!idFile || !proofFile) { setErrors({ verify: "Upload both documents to continue." }); return; }
+    setVerifying(true);
+    setTimeout(() => { setVerifying(false); setVerified(true); }, 1800);
+  }
+
+  function submit() {
+    const rn = refNumber();
+    setRefNo(rn);
+    const newUser = {
+      id: uid("usr"), email: f.email, password: f.password, firstName: f.firstName, lastName: f.lastName,
+      phone: f.phone, address: `${f.address}, ${f.city}, ${f.country} ${f.postalCode}`, occupation: f.occupation,
+      accountType: f.accountType, mfaEnabled: false, isDemo: false, kycVerifiedAt: new Date().toISOString(),
+      idType: f.idType, idNumber: f.idNumber,
+    };
+    setUsers((u) => [...u, newUser]);
+    setDone(true);
+    pushToast("Application submitted — account approved (demo).");
+  }
+
+  if (done) {
+    return (
+      <div className="flex min-h-[calc(100vh-45px)] items-center justify-center px-4 py-16">
+        <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm fade-up">
+          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><CheckCircle2 size={28} /></div>
+          <h1 className="f-display text-2xl font-bold text-slate-900">Application approved</h1>
+          <p className="mt-2 text-sm text-slate-600">Welcome, {f.firstName}. Your Veltra Bank account has been created and auto-approved for this demo.</p>
+          <div className="mt-4 rounded-xl bg-slate-50 p-4 text-left text-sm">
+            <p className="text-slate-500">Reference number</p>
+            <p className="f-mono font-semibold text-slate-900">{refNo}</p>
+            <p className="mt-2 text-slate-500">Account type</p>
+            <p className="font-semibold text-slate-900">{f.accountType}</p>
+          </div>
+          <Btn className="mt-6 w-full" onClick={() => goto("login", null, f.email)}>Continue to log in</Btn>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
+      <button onClick={() => goto("home")} className="mb-6 flex items-center gap-1.5 text-sm font-semibold text-slate-500 hover:text-slate-800"><ArrowLeft size={15} /> Back home</button>
+      <h1 className="f-display text-2xl font-bold text-slate-900">Open an account</h1>
+      <p className="mt-1 mb-6 text-sm text-slate-500">Takes about five minutes. You can review everything before it's submitted.</p>
+      <ProgressSteps steps={REG_STEPS} current={step} />
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8">
+        {step === 0 && (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="First name" required error={errors.firstName}><TextInput value={f.firstName} onChange={(e) => set("firstName", e.target.value)} error={errors.firstName} /></Field>
+              <Field label="Last name" required error={errors.lastName}><TextInput value={f.lastName} onChange={(e) => set("lastName", e.target.value)} error={errors.lastName} /></Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Date of birth" required error={errors.dob} hint="You must be 18 or older."><TextInput type="date" value={f.dob} onChange={(e) => set("dob", e.target.value)} error={errors.dob} /></Field>
+              <Field label="Gender (optional)">
+                <Select value={f.gender} onChange={(e) => set("gender", e.target.value)}>
+                  <option>Prefer not to say</option><option>Female</option><option>Male</option><option>Non-binary</option>
+                </Select>
+              </Field>
+            </div>
+            <Field label="Nationality" required error={errors.nationality}><TextInput value={f.nationality} onChange={(e) => set("nationality", e.target.value)} error={errors.nationality} placeholder="e.g. Ghanaian" /></Field>
+          </div>
+        )}
+
+        {step === 1 && (
+          <div className="space-y-4">
+            <Field label="Residential address" required error={errors.address}><TextInput value={f.address} onChange={(e) => set("address", e.target.value)} error={errors.address} placeholder="Street address" /></Field>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="City" required error={errors.city}><TextInput value={f.city} onChange={(e) => set("city", e.target.value)} error={errors.city} /></Field>
+              <Field label="Country" required error={errors.country}><TextInput value={f.country} onChange={(e) => set("country", e.target.value)} error={errors.country} /></Field>
+              <Field label="Postal code" required error={errors.postalCode}><TextInput value={f.postalCode} onChange={(e) => set("postalCode", e.target.value)} error={errors.postalCode} /></Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Phone number" required error={errors.phone}><TextInput value={f.phone} onChange={(e) => set("phone", e.target.value)} error={errors.phone} placeholder="+233 20 000 0000" /></Field>
+              <Field label="Email address" required error={errors.email}><TextInput type="email" value={f.email} onChange={(e) => set("email", e.target.value)} error={errors.email} placeholder="you@example.com" /></Field>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="ID type" required>
+                <Select value={f.idType} onChange={(e) => set("idType", e.target.value)}>
+                  <option>Passport</option><option>National ID</option><option>Driver's licence</option>
+                </Select>
+              </Field>
+              <Field label="ID number" required error={errors.idNumber}><TextInput value={f.idNumber} onChange={(e) => set("idNumber", e.target.value)} error={errors.idNumber} /></Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Employment status / occupation" required error={errors.occupation}>
+                <Select value={f.occupation} onChange={(e) => set("occupation", e.target.value)}>
+                  <option value="">Select…</option>
+                  <option>Employed</option><option>Self-employed</option><option>Student</option><option>Unemployed</option><option>Retired</option>
+                </Select>
+              </Field>
+              <Field label="Employer name" error={errors.employer} hint="Leave blank if student or unemployed"><TextInput value={f.employer} onChange={(e) => set("employer", e.target.value)} error={errors.employer} /></Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Monthly income">
+                <Select value={f.income} onChange={(e) => set("income", e.target.value)}>
+                  <option>Under $2,000</option><option>$2,000–$4,000</option><option>$4,000–$8,000</option><option>Over $8,000</option>
+                </Select>
+              </Field>
+              <Field label="Primary source of funds">
+                <Select value={f.sourceOfFunds} onChange={(e) => set("sourceOfFunds", e.target.value)}>
+                  <option>Salary/employment</option><option>Business income</option><option>Investments</option><option>Savings</option><option>Other</option>
+                </Select>
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Country of tax residence" required error={errors.taxCountry}><TextInput value={f.taxCountry} onChange={(e) => set("taxCountry", e.target.value)} error={errors.taxCountry} /></Field>
+              <Field label="Tax ID (optional)"><TextInput value={f.taxId} onChange={(e) => set("taxId", e.target.value)} /></Field>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="space-y-4">
+            <Field label="Account type" required>
+              <Select value={f.accountType} onChange={(e) => set("accountType", e.target.value)}>
+                <option>Everyday Checking</option><option>Growth Savings</option><option>Premium Checking</option>
+              </Select>
+            </Field>
+            <Field label="Password" required error={errors.password}>
+              <TextInput type="password" value={f.password} onChange={(e) => set("password", e.target.value)} error={errors.password} />
+            </Field>
+            {f.password && (() => { const s = passwordScore(f.password); const l = passwordLabel(s); return (
+              <div>
+                <div className="flex h-1.5 gap-1">
+                  {[0, 1, 2, 3, 4].map((i) => <div key={i} className={cx("flex-1 rounded-full", i < s ? l.color : "bg-slate-200")} />)}
+                </div>
+                <p className={cx("mt-1 text-xs font-semibold", l.text)}>{l.label}</p>
+              </div>
+            ); })()}
+            <Field label="Confirm password" required error={errors.confirmPassword}>
+              <TextInput type="password" value={f.confirmPassword} onChange={(e) => set("confirmPassword", e.target.value)} error={errors.confirmPassword} />
+            </Field>
+            <p className="text-xs text-slate-500">Use 8+ characters with a mix of upper and lower case letters, numbers, and a symbol.</p>
+          </div>
+        )}
+
+        {step === 4 && (
+          <div className="space-y-5">
+            <p className="text-sm text-slate-600">To comply with identity verification (KYC) requirements, upload a photo of your ID and a proof of address.</p>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-center hover:border-teal-400">
+                <Upload className="text-slate-400" size={22} />
+                <span className="text-sm font-semibold text-slate-700">{idFile || "Upload ID document"}</span>
+                <span className="text-xs text-slate-400">JPG, PNG, or PDF</span>
+                <input type="file" className="hidden" onChange={(e) => setIdFile(e.target.files?.[0]?.name || "")} />
+              </label>
+              <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed border-slate-300 p-6 text-center hover:border-teal-400">
+                <Upload className="text-slate-400" size={22} />
+                <span className="text-sm font-semibold text-slate-700">{proofFile || "Upload proof of address"}</span>
+                <span className="text-xs text-slate-400">Utility bill or bank statement</span>
+                <input type="file" className="hidden" onChange={(e) => setProofFile(e.target.files?.[0]?.name || "")} />
+              </label>
+            </div>
+            {!verified ? (
+              <Btn onClick={runVerification} disabled={verifying} icon={verifying ? Loader2 : FileCheck2} className={verifying ? "animate-pulse" : ""}>
+                {verifying ? "Verifying documents…" : "Run identity verification"}
+              </Btn>
+            ) : (
+              <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700"><CheckCircle2 size={18} /> Identity verified</div>
+            )}
+            {errors.verify && <p className="flex items-center gap-1.5 text-sm font-medium text-rose-600"><AlertCircle size={14} /> {errors.verify}</p>}
+          </div>
+        )}
+
+        {step === 5 && (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-2 rounded-xl bg-slate-50 p-4 text-sm">
+              <p className="text-slate-500">Name</p><p className="font-medium text-slate-900">{f.firstName} {f.lastName}</p>
+              <p className="text-slate-500">Email</p><p className="font-medium text-slate-900">{f.email}</p>
+              <p className="text-slate-500">Phone</p><p className="font-medium text-slate-900">{f.phone}</p>
+              <p className="text-slate-500">Address</p><p className="font-medium text-slate-900">{f.city}, {f.country}</p>
+              <p className="text-slate-500">ID</p><p className="font-medium text-slate-900">{f.idType} •••{f.idNumber.slice(-4)}</p>
+              <p className="text-slate-500">Account type</p><p className="font-medium text-slate-900">{f.accountType}</p>
+              <p className="text-slate-500">Identity verification</p><p className="font-medium text-emerald-600">Verified</p>
+            </div>
+            <div className="space-y-2 text-sm">
+              <label className="flex items-start gap-2"><input type="checkbox" className="mt-0.5 accent-teal-600" checked={f.terms} onChange={(e) => set("terms", e.target.checked)} /> I accept the Terms and Conditions.</label>
+              <label className="flex items-start gap-2"><input type="checkbox" className="mt-0.5 accent-teal-600" checked={f.privacy} onChange={(e) => set("privacy", e.target.checked)} /> I accept the Privacy Policy.</label>
+              <label className="flex items-start gap-2"><input type="checkbox" className="mt-0.5 accent-teal-600" checked={f.econsent} onChange={(e) => set("econsent", e.target.checked)} /> I consent to electronic communications and statements.</label>
+            </div>
+            {errors.terms && <p className="flex items-center gap-1.5 text-sm font-medium text-rose-600"><AlertCircle size={14} /> {errors.terms}</p>}
+          </div>
+        )}
+
+        <div className="mt-8 flex items-center justify-between">
+          <Btn variant="ghost" onClick={back} disabled={step === 0} icon={ArrowLeft}>Back</Btn>
+          <Btn onClick={next}>{step === REG_STEPS.length - 1 ? "Submit application" : "Continue"}</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================== DASHBOARD ============================== */
+const DASH_NAV = [
+  { key: "overview", label: "Overview", icon: LayoutGrid },
+  { key: "transactions", label: "Transactions", icon: History },
+  { key: "transfers", label: "Transfers & Payments", icon: Send },
+  { key: "beneficiaries", label: "Beneficiaries", icon: Users },
+  { key: "cards", label: "Cards", icon: CreditCard },
+  { key: "statements", label: "Statements", icon: FileText },
+  { key: "profile", label: "Profile", icon: Settings },
+  { key: "security", label: "Security", icon: ShieldCheck },
+  { key: "support", label: "Support", icon: HelpCircle },
+];
+
+function Dashboard({ profile, session, setSession, onLogout, initialTab, pushToast, openChat, updateUserPassword }) {
+  const [tab, setTab] = useState(initialTab || "overview");
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [profileMenu, setProfileMenu] = useState(false);
+
+  const unread = session.notifications.filter((n) => !n.read).length;
+
+  function markAllRead() {
+    setSession((s) => ({ ...s, notifications: s.notifications.map((n) => ({ ...n, read: true })) }));
+  }
+
+  const greetTime = new Date().getHours();
+  const greeting = greetTime < 12 ? "Good morning" : greetTime < 18 ? "Good afternoon" : "Good evening";
+
+  return (
+    <div className="flex min-h-[calc(100vh-45px)] bg-slate-50">
+      {/* Sidebar (desktop) */}
+      <aside className="hidden w-64 shrink-0 flex-col border-r border-slate-200 bg-white p-4 lg:flex">
+        <button className="mb-6 px-2" onClick={() => {}}><Logo /></button>
+        <nav className="flex-1 space-y-1">
+          {DASH_NAV.map((n) => (
+            <button
+              key={n.key}
+              onClick={() => setTab(n.key)}
+              className={cx(
+                "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition-colors",
+                tab === n.key ? "bg-teal-50 text-teal-700" : "text-slate-600 hover:bg-slate-50"
+              )}
+            >
+              <n.icon size={17} /> {n.label}
+            </button>
+          ))}
+        </nav>
+        <button onClick={onLogout} className="mt-4 flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50">
+          <LogOut size={17} /> Log out
+        </button>
+      </aside>
+
+      {/* Mobile sidebar drawer */}
+      {sidebarOpen && (
+        <div className="fixed inset-0 z-50 lg:hidden">
+          <div className="absolute inset-0 bg-slate-900/60" onClick={() => setSidebarOpen(false)} />
+          <div className="absolute left-0 top-0 h-full w-72 bg-white p-4 fade-up">
+            <div className="mb-6 flex items-center justify-between px-1">
+              <Logo />
+              <button onClick={() => setSidebarOpen(false)}><X size={20} /></button>
+            </div>
+            <nav className="space-y-1">
+              {DASH_NAV.map((n) => (
+                <button
+                  key={n.key}
+                  onClick={() => { setTab(n.key); setSidebarOpen(false); }}
+                  className={cx("flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold", tab === n.key ? "bg-teal-50 text-teal-700" : "text-slate-600 hover:bg-slate-50")}
+                >
+                  <n.icon size={17} /> {n.label}
+                </button>
+              ))}
+              <button onClick={onLogout} className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-50"><LogOut size={17} /> Log out</button>
+            </nav>
+          </div>
+        </div>
+      )}
+
+      <div className="flex min-h-full flex-1 flex-col">
+        {/* Topbar */}
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-3 sm:px-6">
+          <div className="flex items-center gap-3">
+            <button className="lg:hidden" onClick={() => setSidebarOpen(true)}><Menu size={20} /></button>
+            <div className="hidden items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 sm:flex">
+              <Search size={15} className="text-slate-400" />
+              <input placeholder="Search transactions, beneficiaries…" className="w-56 text-sm outline-none placeholder:text-slate-400" onKeyDown={(e) => { if (e.key === "Enter") setTab("transactions"); }} />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <button onClick={() => { setNotifOpen((o) => !o); setProfileMenu(false); }} className="relative rounded-full p-2 hover:bg-slate-100">
+                <Bell size={19} />
+                {unread > 0 && <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-rose-500" />}
+              </button>
+              {notifOpen && (
+                <div className="absolute right-0 z-40 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-2 shadow-xl fade-up">
+                  <div className="flex items-center justify-between px-2 py-1.5">
+                    <p className="text-sm font-semibold text-slate-900">Notifications</p>
+                    <button onClick={markAllRead} className="text-xs font-semibold text-teal-700">Mark all read</button>
+                  </div>
+                  <div className="max-h-80 space-y-1 overflow-y-auto">
+                    {session.notifications.map((n) => (
+                      <div key={n.id} className={cx("rounded-lg px-2 py-2", !n.read && "bg-teal-50/60")}>
+                        <p className="text-sm font-semibold text-slate-800">{n.title}</p>
+                        <p className="text-xs text-slate-500">{n.body}</p>
+                        <p className="mt-0.5 text-[11px] text-slate-400">{n.time}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="relative">
+              <button onClick={() => { setProfileMenu((o) => !o); setNotifOpen(false); }} className="flex items-center gap-2 rounded-full pl-1 pr-2 py-1 hover:bg-slate-100">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">{profile.firstName?.[0]}{profile.lastName?.[0]}</div>
+                <ChevronDown size={14} className="hidden sm:block text-slate-400" />
+              </button>
+              {profileMenu && (
+                <div className="absolute right-0 z-40 mt-2 w-52 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl fade-up">
+                  <p className="px-2.5 py-2 text-sm font-semibold text-slate-800">{profile.firstName} {profile.lastName}</p>
+                  <button onClick={() => { setTab("profile"); setProfileMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-600 hover:bg-slate-50"><Settings size={15} /> My profile</button>
+                  <button onClick={() => { setTab("security"); setProfileMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-600 hover:bg-slate-50"><ShieldCheck size={15} /> Security</button>
+                  <button onClick={onLogout} className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-rose-600 hover:bg-rose-50"><LogOut size={15} /> Log out</button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 p-4 sm:p-6">
+          {tab === "overview" && <Overview profile={profile} session={session} greeting={greeting} setTab={setTab} />}
+          {tab === "transactions" && <Transactions session={session} />}
+          {tab === "transfers" && <Transfers session={session} setSession={setSession} pushToast={pushToast} />}
+          {tab === "beneficiaries" && <Beneficiaries session={session} setSession={setSession} pushToast={pushToast} />}
+          {tab === "cards" && <CardsTab session={session} setSession={setSession} pushToast={pushToast} />}
+          {tab === "statements" && <Statements session={session} />}
+          {tab === "profile" && <ProfileTab profile={profile} pushToast={pushToast} session={session} />}
+          {tab === "security" && <SecurityTab session={session} setSession={setSession} pushToast={pushToast} updateUserPassword={updateUserPassword} />}
+          {tab === "support" && <SupportTab session={session} setSession={setSession} pushToast={pushToast} openChat={openChat} />}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+function Overview({ profile, session, greeting, setTab }) {
+  const [txModal, setTxModal] = useState(null);
+  const recent = session.transactions.slice(0, 5);
+  const totalBalance = session.accounts.reduce((s, a) => s + (a.type === "Credit" ? 0 : a.current), 0);
+
+  const byCat = {};
+  session.transactions.forEach((t) => { if (t.amount < 0) byCat[t.category] = (byCat[t.category] || 0) + Math.abs(t.amount); });
+  const catList = Object.entries(byCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxCat = Math.max(1, ...catList.map((c) => c[1]));
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="f-display text-2xl font-bold text-slate-900">{greeting}, {profile.firstName}.</h1>
+        <p className="text-sm text-slate-500">Here's where things stand across your accounts.</p>
+      </div>
+
+      <div className="rounded-2xl bg-slate-950 p-6 text-white">
+        <p className="text-xs uppercase tracking-wide text-slate-400">Total balance across accounts</p>
+        <p className="f-mono mt-1 text-3xl font-semibold">{fmt(totalBalance)}</p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Btn size="sm" onClick={() => setTab("transfers")} icon={Send}>Send money</Btn>
+          <Btn size="sm" variant="outlineLight" onClick={() => setTab("beneficiaries")} icon={Plus}>Add beneficiary</Btn>
+          <Btn size="sm" variant="outlineLight" onClick={() => setTab("cards")} icon={Snowflake}>Manage cards</Btn>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {session.accounts.map((a) => (
+          <div key={a.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex items-center justify-between">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-teal-50 text-teal-700"><AccountIcon type={a.type} size={17} /></div>
+              <Badge tone={a.type === "Credit" ? "amber" : "slate"}>{a.type}</Badge>
+            </div>
+            <p className="mt-3 text-sm font-semibold text-slate-800">{a.name}</p>
+            <p className="text-xs text-slate-400 f-mono">•••• {a.number}</p>
+            <p className="f-mono mt-3 text-2xl font-semibold text-slate-900">{fmt(a.type === "Credit" ? a.available : a.available)}</p>
+            <p className="text-xs text-slate-500">{a.type === "Credit" ? `Available credit of ${fmt(a.limit)} limit` : "Available balance"}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-6 lg:grid-cols-5">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-3">
+          <div className="mb-3 flex items-center justify-between">
+            <h3 className="f-display font-semibold text-slate-900">Recent transactions</h3>
+            <button onClick={() => setTab("transactions")} className="text-sm font-semibold text-teal-700">View all</button>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {recent.map((t) => (
+              <button key={t.id} onClick={() => setTxModal(t)} className="flex w-full items-center justify-between py-2.5 text-left hover:bg-slate-50 px-1 rounded-lg">
+                <div className="flex items-center gap-3">
+                  <div className={cx("flex h-8 w-8 items-center justify-center rounded-full", t.amount > 0 ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500")}>
+                    {t.amount > 0 ? <ArrowDownLeft size={14} /> : <ArrowUpRight size={14} />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-slate-800">{t.description}</p>
+                    <p className="text-xs text-slate-400">{fmtDate(t.date)} · {t.category}</p>
+                  </div>
+                </div>
+                <p className={cx("f-mono text-sm font-semibold", t.amount > 0 ? "text-emerald-600" : "text-slate-800")}>{t.amount > 0 ? "+" : ""}{fmt(t.amount)}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 lg:col-span-2">
+          <h3 className="f-display mb-4 font-semibold text-slate-900 flex items-center gap-2"><BarChart3 size={16} className="text-teal-600" /> Spending by category</h3>
+          <div className="space-y-3">
+            {catList.length === 0 && <p className="text-sm text-slate-400">No spending yet.</p>}
+            {catList.map(([cat, val]) => (
+              <div key={cat}>
+                <div className="mb-1 flex justify-between text-xs font-medium text-slate-600"><span>{cat}</span><span className="f-mono">{fmt(val)}</span></div>
+                <div className="h-2 rounded-full bg-slate-100"><div className="h-2 rounded-full bg-teal-600" style={{ width: `${(val / maxCat) * 100}%` }} /></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <TxDetailModal tx={txModal} onClose={() => setTxModal(null)} />
+    </div>
+  );
+}
+
+function TxDetailModal({ tx, onClose }) {
+  return (
+    <Modal open={!!tx} onClose={onClose} title="Transaction details">
+      {tx && (
+        <div className="space-y-3 text-sm">
+          <div className="flex justify-between"><span className="text-slate-500">Description</span><span className="font-medium text-slate-900">{tx.description}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className={cx("f-mono font-semibold", tx.amount > 0 ? "text-emerald-600" : "text-slate-900")}>{tx.amount > 0 ? "+" : ""}{fmt(tx.amount)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Category</span><span className="font-medium text-slate-900">{tx.category}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Date</span><span className="font-medium text-slate-900">{fmtDate(tx.date)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Status</span><Badge tone={tx.status === "Posted" ? "green" : "amber"}>{tx.status}</Badge></div>
+          <div className="flex justify-between"><span className="text-slate-500">Reference</span><span className="f-mono text-xs text-slate-500">{tx.id}</span></div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function Transactions({ session }) {
+  const [q, setQ] = useState("");
+  const [acc, setAcc] = useState("all");
+  const [type, setType] = useState("all");
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [detail, setDetail] = useState(null);
+
+  const filtered = session.transactions.filter((t) => {
+    if (q && !t.description.toLowerCase().includes(q.toLowerCase()) && !t.category.toLowerCase().includes(q.toLowerCase())) return false;
+    if (acc !== "all" && t.accountId !== acc) return false;
+    if (type === "credit" && t.amount < 0) return false;
+    if (type === "debit" && t.amount > 0) return false;
+    if (from && new Date(t.date) < new Date(from)) return false;
+    if (to && new Date(t.date) > new Date(to)) return false;
+    return true;
+  });
+
+  return (
+    <div className="space-y-5">
+      <h1 className="f-display text-2xl font-bold text-slate-900">Transactions</h1>
+      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="relative lg:col-span-2">
+          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search description or category" className="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm" />
+        </div>
+        <Select value={acc} onChange={(e) => setAcc(e.target.value)}>
+          <option value="all">All accounts</option>
+          {session.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+        </Select>
+        <Select value={type} onChange={(e) => setType(e.target.value)}>
+          <option value="all">All types</option><option value="credit">Money in</option><option value="debit">Money out</option>
+        </Select>
+        <div className="flex gap-2">
+          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="w-1/2 rounded-lg border border-slate-300 px-2 py-2 text-xs" />
+          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="w-1/2 rounded-lg border border-slate-300 px-2 py-2 text-xs" />
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        {filtered.length === 0 ? (
+          <p className="p-8 text-center text-sm text-slate-400">No transactions match your filters.</p>
+        ) : (
+          <div className="divide-y divide-slate-100">
+            {filtered.map((t) => (
+              <button key={t.id} onClick={() => setDetail(t)} className="flex w-full items-center justify-between px-5 py-3 text-left hover:bg-slate-50">
+                <div className="flex items-center gap-3">
+                  <div className={cx("flex h-9 w-9 items-center justify-center rounded-full", t.amount > 0 ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500")}>
+                    {t.amount > 0 ? <ArrowDownLeft size={15} /> : <ArrowUpRight size={15} />}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{t.description}</p>
+                    <p className="text-xs text-slate-400">{fmtDate(t.date)} · {t.category} · <span className={t.status === "Pending" ? "text-amber-600" : ""}>{t.status}</span></p>
+                  </div>
+                </div>
+                <p className={cx("f-mono text-sm font-semibold", t.amount > 0 ? "text-emerald-600" : "text-slate-800")}>{t.amount > 0 ? "+" : ""}{fmt(t.amount)}</p>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <TxDetailModal tx={detail} onClose={() => setDetail(null)} />
+    </div>
+  );
+}
+
+function Transfers({ session, setSession, pushToast }) {
+  const [sub, setSub] = useState("send");
+  return (
+    <div className="space-y-5">
+      <h1 className="f-display text-2xl font-bold text-slate-900">Transfers &amp; payments</h1>
+      <div className="flex gap-2 rounded-xl border border-slate-200 bg-white p-1 w-fit">
+        {[{ k: "send", l: "Send money" }, { k: "bill", l: "Pay a bill" }].map((s) => (
+          <button key={s.k} onClick={() => setSub(s.k)} className={cx("rounded-lg px-4 py-2 text-sm font-semibold", sub === s.k ? "bg-teal-600 text-white" : "text-slate-600")}>{s.l}</button>
+        ))}
+      </div>
+      {sub === "send" ? <SendMoney session={session} setSession={setSession} pushToast={pushToast} /> : <PayBill session={session} setSession={setSession} pushToast={pushToast} />}
+    </div>
+  );
+}
+
+function SendMoney({ session, setSession, pushToast }) {
+  const [fromId, setFromId] = useState(session.accounts[0]?.id);
+  const [recipientMode, setRecipientMode] = useState("beneficiary");
+  const [benId, setBenId] = useState(session.beneficiaries[0]?.id || "");
+  const [newName, setNewName] = useState("");
+  const [newBank, setNewBank] = useState("");
+  const [newAcc, setNewAcc] = useState("");
+  const [amount, setAmount] = useState("");
+  const [note, setNote] = useState("");
+  const [errors, setErrors] = useState({});
+  const [stage, setStage] = useState("form");
+  const [ref, setRef] = useState("");
+
+  const fromAccount = session.accounts.find((a) => a.id === fromId);
+  const isInternal = recipientMode === "beneficiary" && session.beneficiaries.find((b) => b.id === benId)?.type === "Internal";
+  const fee = recipientMode === "new" || (recipientMode === "beneficiary" && !isInternal) ? 2.5 : 0;
+
+  function review(e) {
+    e.preventDefault();
+    const errs = {};
+    const amt = parseFloat(amount);
+    if (!amt || amt <= 0) errs.amount = "Enter a valid amount.";
+    else if (fromAccount && amt + fee > fromAccount.available) errs.amount = "Amount exceeds available balance.";
+    if (recipientMode === "beneficiary" && !benId) errs.recipient = "Select a beneficiary.";
+    if (recipientMode === "new") {
+      if (!newName.trim()) errs.newName = "Required.";
+      if (!newBank.trim()) errs.newBank = "Required.";
+      if (!/^[0-9]{6,18}$/.test(newAcc)) errs.newAcc = "Enter a valid account number.";
+    }
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    setStage("review");
+  }
+
+  function confirm() {
+    const amt = parseFloat(amount);
+    const recipientName = recipientMode === "new" ? newName : session.beneficiaries.find((b) => b.id === benId)?.name;
+    const rn = refNumber();
+    setRef(rn);
+    setSession((s) => {
+      const accounts = s.accounts.map((a) => a.id === fromId ? { ...a, available: +(a.available - amt - fee).toFixed(2), current: +(a.current - amt - fee).toFixed(2) } : a);
+      const txns = [{ id: uid("txn"), accountId: fromId, date: new Date().toISOString(), description: `Transfer to ${recipientName}`, category: "Transfer", amount: -amt, status: "Posted" }, ...s.transactions];
+      let beneficiaries = s.beneficiaries;
+      if (recipientMode === "new") {
+        beneficiaries = [...s.beneficiaries, { id: uid("ben"), name: newName, nickname: newName, bank: newBank, accountNumber: newAcc, type: "External" }];
+      }
+      const notifications = [{ id: uid("ntf"), title: "Payment sent", body: `You sent ${fmt(amt)} to ${recipientName}.`, time: "Just now", read: false, type: "transfer" }, ...s.notifications];
+      return { ...s, accounts, transactions: txns, beneficiaries, notifications };
+    });
+    setStage("done");
+    pushToast(`${fmt(amt)} sent to ${recipientName}.`);
+  }
+
+  function resetForm() {
+    setAmount(""); setNote(""); setStage("form"); setNewName(""); setNewBank(""); setNewAcc("");
+  }
+
+  if (stage === "done") {
+    return (
+      <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center">
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-emerald-600"><CheckCircle2 size={26} /></div>
+        <h3 className="f-display text-xl font-bold text-slate-900">Transfer complete</h3>
+        <p className="mt-2 text-sm text-slate-500">Reference <span className="f-mono">{ref}</span></p>
+        <Btn className="mt-6 w-full" onClick={resetForm}>Make another transfer</Btn>
+      </div>
+    );
+  }
+
+  if (stage === "review") {
+    const amt = parseFloat(amount);
+    const recipientName = recipientMode === "new" ? newName : session.beneficiaries.find((b) => b.id === benId)?.name;
+    return (
+      <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-6">
+        <h3 className="f-display mb-4 text-lg font-semibold text-slate-900">Review transfer</h3>
+        <div className="space-y-3 text-sm">
+          <div className="flex justify-between"><span className="text-slate-500">From</span><span className="font-medium">{fromAccount?.name}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">To</span><span className="font-medium">{recipientName}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Amount</span><span className="f-mono font-medium">{fmt(amt)}</span></div>
+          <div className="flex justify-between"><span className="text-slate-500">Fee</span><span className="f-mono font-medium">{fee ? fmt(fee) : "Free"}</span></div>
+          <div className="flex justify-between border-t border-slate-100 pt-3"><span className="font-semibold text-slate-800">Total</span><span className="f-mono font-semibold">{fmt(amt + fee)}</span></div>
+        </div>
+        <div className="mt-6 flex gap-3">
+          <Btn variant="outline" className="flex-1" onClick={() => setStage("form")}>Edit</Btn>
+          <Btn className="flex-1" onClick={confirm}>Confirm &amp; send</Btn>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={review} className="max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
+      <Field label="From account" required>
+        <Select value={fromId} onChange={(e) => setFromId(e.target.value)}>
+          {session.accounts.filter((a) => a.type !== "Credit").map((a) => <option key={a.id} value={a.id}>{a.name} — {fmt(a.available)}</option>)}
+        </Select>
+      </Field>
+      <Field label="Recipient" required error={errors.recipient}>
+        <div className="mb-2 flex gap-2 text-xs font-semibold">
+          <button type="button" onClick={() => setRecipientMode("beneficiary")} className={cx("rounded-full px-3 py-1", recipientMode === "beneficiary" ? "bg-teal-600 text-white" : "bg-slate-100 text-slate-600")}>Saved beneficiary</button>
+          <button type="button" onClick={() => setRecipientMode("new")} className={cx("rounded-full px-3 py-1", recipientMode === "new" ? "bg-teal-600 text-white" : "bg-slate-100 text-slate-600")}>New recipient</button>
+        </div>
+        {recipientMode === "beneficiary" ? (
+          session.beneficiaries.length ? (
+            <Select value={benId} onChange={(e) => setBenId(e.target.value)} error={errors.recipient}>
+              {session.beneficiaries.map((b) => <option key={b.id} value={b.id}>{b.nickname} — {b.bank}</option>)}
+            </Select>
+          ) : <p className="text-xs text-slate-400">No saved beneficiaries yet — add one from the Beneficiaries tab, or send to a new recipient.</p>
+        ) : (
+          <div className="space-y-3">
+            <TextInput placeholder="Recipient name" value={newName} onChange={(e) => setNewName(e.target.value)} error={errors.newName} />
+            {errors.newName && <p className="text-xs font-medium text-rose-600">{errors.newName}</p>}
+            <TextInput placeholder="Recipient bank" value={newBank} onChange={(e) => setNewBank(e.target.value)} error={errors.newBank} />
+            {errors.newBank && <p className="text-xs font-medium text-rose-600">{errors.newBank}</p>}
+            <TextInput placeholder="Account number" value={newAcc} onChange={(e) => setNewAcc(e.target.value)} error={errors.newAcc} />
+            {errors.newAcc && <p className="text-xs font-medium text-rose-600">{errors.newAcc}</p>}
+          </div>
+        )}
+      </Field>
+      <Field label="Amount" required error={errors.amount}>
+        <TextInput type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} error={errors.amount} placeholder="0.00" />
+      </Field>
+      <Field label="Note (optional)"><TextInput value={note} onChange={(e) => setNote(e.target.value)} placeholder="What's this for?" /></Field>
+      <Btn type="submit" className="w-full">Review transfer</Btn>
+    </form>
+  );
+}
+
+function PayBill({ session, setSession, pushToast }) {
+  const [billerId, setBillerId] = useState(BILLERS[0].id);
+  const [fromId, setFromId] = useState(session.accounts[0]?.id);
+  const [amount, setAmount] = useState("");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [errors, setErrors] = useState({});
+  const [success, setSuccess] = useState(null);
+
+  function submit(e) {
+    e.preventDefault();
+    const errs = {};
+    const amt = parseFloat(amount);
+    const fromAccount = session.accounts.find((a) => a.id === fromId);
+    if (!amt || amt <= 0) errs.amount = "Enter a valid amount.";
+    else if (fromAccount && amt > fromAccount.available) errs.amount = "Amount exceeds available balance.";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    const biller = BILLERS.find((b) => b.id === billerId);
+    setSession((s) => ({
+      ...s,
+      accounts: s.accounts.map((a) => a.id === fromId ? { ...a, available: +(a.available - amt).toFixed(2), current: +(a.current - amt).toFixed(2) } : a),
+      transactions: [{ id: uid("txn"), accountId: fromId, date: new Date().toISOString(), description: biller.name, category: "Utilities", amount: -amt, status: "Pending" }, ...s.transactions],
+    }));
+    setSuccess({ biller: biller.name, amt });
+    pushToast(`${fmt(amt)} scheduled to ${biller.name}.`);
+    setAmount("");
+  }
+
+  return (
+    <form onSubmit={submit} className="max-w-md space-y-4 rounded-2xl border border-slate-200 bg-white p-6">
+      <Field label="Biller" required>
+        <div className="grid grid-cols-2 gap-2">
+          {BILLERS.map((b) => (
+            <button type="button" key={b.id} onClick={() => setBillerId(b.id)} className={cx("flex items-center gap-2 rounded-xl border p-3 text-left text-sm font-medium", billerId === b.id ? "border-teal-600 bg-teal-50 text-teal-800" : "border-slate-200 text-slate-600")}>
+              <b.icon size={16} /> {b.name}
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Pay from" required>
+        <Select value={fromId} onChange={(e) => setFromId(e.target.value)}>
+          {session.accounts.filter((a) => a.type !== "Credit").map((a) => <option key={a.id} value={a.id}>{a.name} — {fmt(a.available)}</option>)}
+        </Select>
+      </Field>
+      <Field label="Amount" required error={errors.amount}><TextInput type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} error={errors.amount} /></Field>
+      <Field label="Payment date"><TextInput type="date" value={date} onChange={(e) => setDate(e.target.value)} /></Field>
+      <Btn type="submit" className="w-full">Pay bill</Btn>
+      {success && <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-600"><CheckCircle2 size={15} /> {fmt(success.amt)} scheduled to {success.biller}.</p>}
+    </form>
+  );
+}
+
+function Beneficiaries({ session, setSession, pushToast }) {
+  const [modal, setModal] = useState(false);
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({ name: "", nickname: "", bank: "", accountNumber: "", type: "External" });
+  const [errors, setErrors] = useState({});
+
+  function openNew() { setEditing(null); setForm({ name: "", nickname: "", bank: "", accountNumber: "", type: "External" }); setModal(true); }
+  function openEdit(b) { setEditing(b.id); setForm(b); setModal(true); }
+
+  function save(e) {
+    e.preventDefault();
+    const errs = {};
+    if (!form.name.trim()) errs.name = "Required.";
+    if (!form.bank.trim()) errs.bank = "Required.";
+    if (!/^[0-9]{6,18}$/.test(form.accountNumber)) errs.accountNumber = "Enter a valid account number.";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    setSession((s) => {
+      if (editing) return { ...s, beneficiaries: s.beneficiaries.map((b) => b.id === editing ? { ...form, id: editing, nickname: form.nickname || form.name } : b) };
+      return { ...s, beneficiaries: [...s.beneficiaries, { ...form, id: uid("ben"), nickname: form.nickname || form.name }] };
+    });
+    pushToast(editing ? "Beneficiary updated." : "Beneficiary added.");
+    setModal(false);
+  }
+
+  function remove(id) {
+    setSession((s) => ({ ...s, beneficiaries: s.beneficiaries.filter((b) => b.id !== id) }));
+    pushToast("Beneficiary removed.");
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-center justify-between">
+        <h1 className="f-display text-2xl font-bold text-slate-900">Beneficiaries</h1>
+        <Btn icon={Plus} onClick={openNew}>Add beneficiary</Btn>
+      </div>
+      {session.beneficiaries.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-400">No beneficiaries yet. Add one to start sending money.</div>
+      ) : (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {session.beneficiaries.map((b) => (
+            <div key={b.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+              <div className="flex items-start justify-between">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-900 text-sm font-bold text-white">{b.name.split(" ").map((n) => n[0]).slice(0, 2).join("")}</div>
+                <Badge tone={b.type === "Internal" ? "teal" : "slate"}>{b.type}</Badge>
+              </div>
+              <p className="mt-3 font-semibold text-slate-900">{b.nickname}</p>
+              <p className="text-sm text-slate-500">{b.name}</p>
+              <p className="text-xs text-slate-400">{b.bank} · •••{b.accountNumber.slice(-4)}</p>
+              <div className="mt-4 flex gap-2">
+                <Btn size="sm" variant="outline" icon={Edit2} onClick={() => openEdit(b)}>Edit</Btn>
+                <Btn size="sm" variant="ghost" icon={Trash2} onClick={() => remove(b.id)}>Remove</Btn>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <Modal open={modal} onClose={() => setModal(false)} title={editing ? "Edit beneficiary" : "Add beneficiary"}>
+        <form onSubmit={save} className="space-y-4">
+          <Field label="Full name" required error={errors.name}><TextInput value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errors.name} /></Field>
+          <Field label="Nickname"><TextInput value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} placeholder="Optional" /></Field>
+          <Field label="Bank name" required error={errors.bank}><TextInput value={form.bank} onChange={(e) => setForm({ ...form, bank: e.target.value })} error={errors.bank} /></Field>
+          <Field label="Account number" required error={errors.accountNumber}><TextInput value={form.accountNumber} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} error={errors.accountNumber} /></Field>
+          <Field label="Type">
+            <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              <option>Internal</option><option>External</option>
+            </Select>
+          </Field>
+          <Btn type="submit" className="w-full">{editing ? "Save changes" : "Add beneficiary"}</Btn>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+function CardsTab({ session, setSession, pushToast }) {
+  const [reveal, setReveal] = useState(null);
+  const [pwModal, setPwModal] = useState(null);
+  const [pwInput, setPwInput] = useState("");
+  const [limitModal, setLimitModal] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
+
+  function toggleFreeze(id) {
+    setSession((s) => ({ ...s, cards: s.cards.map((c) => c.id === id ? { ...c, status: c.status === "Frozen" ? "Active" : "Frozen" } : c) }));
+    const card = session.cards.find((c) => c.id === id);
+    pushToast(card.status === "Frozen" ? "Card unfrozen." : "Card frozen — no new transactions will be approved.");
+  }
+  function requestReplacement(id) {
+    setSession((s) => ({ ...s, cards: s.cards.map((c) => c.id === id ? { ...c, status: "Replacement requested" } : c) }));
+    pushToast("Replacement card requested — arrives in 5–7 business days (demo).");
+    setConfirmModal(null);
+  }
+  function reportLost(id) {
+    setSession((s) => ({ ...s, cards: s.cards.map((c) => c.id === id ? { ...c, status: "Blocked · replacement ordered" } : c) }));
+    pushToast("Card reported lost and blocked. A replacement is on its way.");
+    setConfirmModal(null);
+  }
+  function saveLimit(id, limit) {
+    setSession((s) => ({ ...s, cards: s.cards.map((c) => c.id === id ? { ...c, limit } : c) }));
+    pushToast("Spending limit updated.");
+    setLimitModal(null);
+  }
+  function tryReveal() {
+    if (pwInput.length < 3) { pushToast("Enter your password to continue.", "error"); return; }
+    setReveal(pwModal);
+    setPwModal(null);
+    setPwInput("");
+    setTimeout(() => setReveal(null), 10000);
+  }
+
+  return (
+    <div className="space-y-5">
+      <h1 className="f-display text-2xl font-bold text-slate-900">Cards</h1>
+      <div className="grid gap-6 md:grid-cols-2">
+        {session.cards.map((c) => (
+          <div key={c.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div className={cx("mb-4 aspect-[1.6/1] rounded-xl p-5 text-white shadow-inner bg-gradient-to-br", c.kind === "Debit" ? "from-slate-800 to-slate-950" : "from-teal-700 to-teal-950")}>
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold uppercase tracking-wide text-white/80">Veltra {c.kind}</span>
+                <Landmark size={16} />
+              </div>
+              <p className="f-mono mt-8 text-lg tracking-widest text-white/90">
+                {reveal === c.id ? c.full : `•••• •••• •••• ${c.last4}`}
+              </p>
+              <div className="mt-3 flex justify-between text-xs text-white/70">
+                <span>Exp {c.expiry}</span>
+                <span>CVV {reveal === c.id ? c.cvv : "•••"}</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between">
+              <p className="font-semibold text-slate-900">{c.name}</p>
+              <Badge tone={c.status === "Active" ? "green" : c.status.includes("Block") ? "rose" : "amber"}>{c.status}</Badge>
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Spending limit: {fmt(c.limit)}</p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Btn size="sm" variant={c.status === "Frozen" ? "primary" : "outline"} icon={Snowflake} onClick={() => toggleFreeze(c.id)}>{c.status === "Frozen" ? "Unfreeze" : "Freeze"}</Btn>
+              <Btn size="sm" variant="outline" icon={Eye} onClick={() => setPwModal(c.id)}>Show details</Btn>
+              <Btn size="sm" variant="outline" icon={Settings} onClick={() => setLimitModal(c)}>Set limit</Btn>
+              <Btn size="sm" variant="ghost" icon={RefreshCw} onClick={() => setConfirmModal({ id: c.id, action: "replace" })}>Replace</Btn>
+              <Btn size="sm" variant="ghost" className="text-rose-600" icon={ShieldAlert} onClick={() => setConfirmModal({ id: c.id, action: "lost" })}>Report lost</Btn>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <Modal open={!!pwModal} onClose={() => setPwModal(null)} title="Confirm your password">
+        <p className="mb-3 text-sm text-slate-500">For your security, re-enter your password to view full card details.</p>
+        <TextInput type="password" value={pwInput} onChange={(e) => setPwInput(e.target.value)} placeholder="Password" />
+        <Btn className="mt-4 w-full" onClick={tryReveal}>Confirm</Btn>
+      </Modal>
+
+      <Modal open={!!limitModal} onClose={() => setLimitModal(null)} title="Set spending limit">
+        {limitModal && <LimitEditor card={limitModal} onSave={saveLimit} />}
+      </Modal>
+
+      <Modal open={!!confirmModal} onClose={() => setConfirmModal(null)} title={confirmModal?.action === "lost" ? "Report card lost or stolen" : "Request replacement card"}>
+        <p className="mb-4 text-sm text-slate-600">
+          {confirmModal?.action === "lost" ? "This will immediately block the card from further use and order a free replacement." : "A new physical card will be mailed to your address on file within 5–7 business days."}
+        </p>
+        <div className="flex gap-3">
+          <Btn variant="outline" className="flex-1" onClick={() => setConfirmModal(null)}>Cancel</Btn>
+          <Btn variant="danger" className="flex-1" onClick={() => confirmModal?.action === "lost" ? reportLost(confirmModal.id) : requestReplacement(confirmModal.id)}>Confirm</Btn>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function LimitEditor({ card, onSave }) {
+  const [val, setVal] = useState(card.limit);
+  return (
+    <div className="space-y-4">
+      <p className="f-mono text-2xl font-semibold text-slate-900">{fmt(val)}</p>
+      <input type="range" min="100" max="10000" step="100" value={val} onChange={(e) => setVal(+e.target.value)} className="w-full accent-teal-600" />
+      <Btn className="w-full" onClick={() => onSave(card.id, val)}>Save limit</Btn>
+    </div>
+  );
+}
+
+function Statements({ session }) {
+  const [view, setView] = useState(null);
+  const [accFilter, setAccFilter] = useState("all");
+  const filtered = accFilter === "all" ? session.statements : session.statements.filter((s) => s.account === accFilter);
+  const accNames = [...new Set(session.statements.map((s) => s.account))];
+
+  function statementText(st) {
+    const txns = session.transactions.filter((t) => {
+      const acc = session.accounts.find((a) => a.id === t.accountId);
+      return acc?.name === st.account;
+    }).slice(0, 12);
+    let body = `Veltra Bank (demo) — Statement\nAccount: ${st.account}\nPeriod: ${st.period}\n\nTransactions:\n`;
+    if (!txns.length) body += "No transactions recorded for this period in the demo dataset.\n";
+    txns.forEach((t) => { body += `${fmtDate(t.date)}  ${t.description.padEnd(30)}  ${t.amount > 0 ? "+" : ""}${fmt(t.amount)}\n`; });
+    return body;
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="f-display text-2xl font-bold text-slate-900">Statements</h1>
+        <Select value={accFilter} onChange={(e) => setAccFilter(e.target.value)} className="w-auto">
+          <option value="all">All accounts</option>
+          {accNames.map((n) => <option key={n} value={n}>{n}</option>)}
+        </Select>
+      </div>
+      {filtered.length === 0 ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 p-10 text-center text-sm text-slate-400">Statements will appear here once your first billing cycle closes.</div>
+      ) : (
+        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+          <div className="divide-y divide-slate-100">
+            {filtered.map((s) => (
+              <div key={s.id} className="flex items-center justify-between px-5 py-3">
+                <div className="flex items-center gap-3">
+                  <FileText size={17} className="text-slate-400" />
+                  <div>
+                    <p className="text-sm font-semibold text-slate-800">{s.account}</p>
+                    <p className="text-xs text-slate-400">{s.period}</p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <Btn size="sm" variant="outline" onClick={() => setView(s)}>View</Btn>
+                  <Btn size="sm" variant="subtle" icon={Download} onClick={() => download(`${s.account.replace(/\s+/g, "-")}-${s.period.replace(/\s+/g, "-")}.txt`, statementText(s))}>Download</Btn>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <Modal open={!!view} onClose={() => setView(null)} title={view ? `${view.account} — ${view.period}` : ""} wide>
+        {view && <pre className="whitespace-pre-wrap rounded-xl bg-slate-50 p-4 text-xs f-mono text-slate-700">{statementText(view)}</pre>}
+      </Modal>
+    </div>
+  );
+}
+
+function ProfileTab({ profile, pushToast, session }) {
+  const [form, setForm] = useState({ phone: profile.phone || "", address: profile.address || "", occupation: profile.occupation || "" });
+  const [errors, setErrors] = useState({});
+
+  function save(e) {
+    e.preventDefault();
+    const errs = {};
+    if (!phoneRe.test(form.phone)) errs.phone = "Enter a valid phone number.";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    pushToast("Profile updated.");
+  }
+
+  function downloadData() {
+    download("veltra-account-data.json", JSON.stringify({ profile: { ...profile, password: undefined }, accounts: session.accounts, beneficiaries: session.beneficiaries }, null, 2));
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <h1 className="f-display text-2xl font-bold text-slate-900">Profile</h1>
+      <div className="flex items-center gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-lg font-bold text-white">{profile.firstName?.[0]}{profile.lastName?.[0]}</div>
+        <div>
+          <p className="font-semibold text-slate-900">{profile.firstName} {profile.lastName}</p>
+          <p className="text-sm text-slate-500">{profile.email}</p>
+          <Badge tone="green">KYC verified</Badge>
+        </div>
+      </div>
+      <form onSubmit={save} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+        <Field label="Phone number" required error={errors.phone}><TextInput value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} error={errors.phone} /></Field>
+        <Field label="Residential address"><TextInput value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} /></Field>
+        <Field label="Occupation"><TextInput value={form.occupation} onChange={(e) => setForm({ ...form, occupation: e.target.value })} /></Field>
+        <Btn type="submit">Save changes</Btn>
+      </form>
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <p className="font-semibold text-slate-900">Your data</p>
+        <p className="mt-1 text-sm text-slate-500">Download a copy of your account information at any time.</p>
+        <Btn variant="outline" className="mt-3" icon={Download} onClick={downloadData}>Download my data</Btn>
+      </div>
+    </div>
+  );
+}
+
+function SecurityTab({ session, setSession, pushToast, updateUserPassword }) {
+  const [cur, setCur] = useState(""); const [pw1, setPw1] = useState(""); const [pw2, setPw2] = useState("");
+  const [errors, setErrors] = useState({});
+  const [mfaSetup, setMfaSetup] = useState(false);
+  const [mfaCode, setMfaCode] = useState("");
+
+  function changePassword(e) {
+    e.preventDefault();
+    const errs = {};
+    const ok = updateUserPassword.check(cur);
+    if (!ok) errs.cur = "Current password is incorrect.";
+    if (passwordScore(pw1) < 3) errs.pw1 = "Choose a stronger password.";
+    if (pw1 !== pw2) errs.pw2 = "Passwords do not match.";
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
+    updateUserPassword.set(pw1);
+    pushToast("Password changed successfully.");
+    setCur(""); setPw1(""); setPw2("");
+    setSession((s) => ({ ...s, security: { ...s.security, auditLog: [{ id: uid("log"), event: "Password changed", detail: "Self-service", time: "Just now" }, ...s.security.auditLog] } }));
+  }
+
+  function toggleMfa() {
+    if (session.security.mfaEnabled) {
+      setSession((s) => ({ ...s, security: { ...s.security, mfaEnabled: false } }));
+      pushToast("Two-factor authentication turned off.");
+    } else {
+      setMfaSetup(true);
+    }
+  }
+  function confirmMfa() {
+    if (mfaCode !== "123456") { pushToast("Incorrect code — use 123456 in this demo.", "error"); return; }
+    setSession((s) => ({ ...s, security: { ...s.security, mfaEnabled: true, auditLog: [{ id: uid("log"), event: "Two-factor authentication enabled", detail: "Authenticator app", time: "Just now" }, ...s.security.auditLog] } }));
+    setMfaSetup(false); setMfaCode("");
+    pushToast("Two-factor authentication enabled.");
+  }
+  function revoke(id) {
+    setSession((s) => ({ ...s, security: { ...s.security, sessions: s.security.sessions.filter((x) => x.id !== id) } }));
+    pushToast("Session signed out.");
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <h1 className="f-display text-2xl font-bold text-slate-900">Security</h1>
+
+      <form onSubmit={changePassword} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+        <p className="flex items-center gap-2 font-semibold text-slate-900"><KeyRound size={16} className="text-teal-600" /> Change password</p>
+        <Field label="Current password" required error={errors.cur}><TextInput type="password" value={cur} onChange={(e) => setCur(e.target.value)} error={errors.cur} /></Field>
+        <Field label="New password" required error={errors.pw1}><TextInput type="password" value={pw1} onChange={(e) => setPw1(e.target.value)} error={errors.pw1} /></Field>
+        {pw1 && (() => { const s = passwordScore(pw1); const l = passwordLabel(s); return <p className={cx("text-xs font-semibold", l.text)}>{l.label}</p>; })()}
+        <Field label="Confirm new password" required error={errors.pw2}><TextInput type="password" value={pw2} onChange={(e) => setPw2(e.target.value)} error={errors.pw2} /></Field>
+        <Btn type="submit">Update password</Btn>
+      </form>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="flex items-center gap-2 font-semibold text-slate-900"><Smartphone size={16} className="text-teal-600" /> Two-factor authentication</p>
+            <p className="mt-1 text-sm text-slate-500">Require a one-time code on every sign-in.</p>
+          </div>
+          <button onClick={toggleMfa} className={cx("h-7 w-12 rounded-full transition-colors", session.security.mfaEnabled ? "bg-teal-600" : "bg-slate-300")}>
+            <span className={cx("block h-5 w-5 translate-x-1 rounded-full bg-white transition-transform", session.security.mfaEnabled && "translate-x-6")} />
+          </button>
+        </div>
+        {mfaSetup && (
+          <div className="mt-4 rounded-xl bg-slate-50 p-4">
+            <div className="mx-auto mb-3 flex h-28 w-28 items-center justify-center rounded-lg border-2 border-dashed border-slate-300 text-xs text-slate-400">QR code</div>
+            <p className="mb-2 text-center text-xs text-slate-500">Scan with an authenticator app, then enter the code. Demo code: <span className="f-mono font-semibold">123456</span></p>
+            <TextInput value={mfaCode} onChange={(e) => setMfaCode(e.target.value)} placeholder="6-digit code" />
+            <Btn className="mt-3 w-full" onClick={confirmMfa}>Confirm &amp; enable</Btn>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <p className="mb-3 font-semibold text-slate-900">Active sessions</p>
+        <div className="space-y-2">
+          {session.security.sessions.map((s) => (
+            <div key={s.id} className="flex items-center justify-between rounded-lg border border-slate-100 px-3 py-2 text-sm">
+              <div>
+                <p className="font-medium text-slate-800">{s.device} {s.current && <Badge tone="teal">This device</Badge>}</p>
+                <p className="text-xs text-slate-400">{s.location} · {s.lastActive}</p>
+              </div>
+              {!s.current && <button onClick={() => revoke(s.id)} className="text-xs font-semibold text-rose-600">Sign out</button>}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-slate-200 bg-white p-5">
+        <p className="mb-3 font-semibold text-slate-900">Login &amp; account activity</p>
+        <div className="space-y-2 text-sm">
+          {session.security.auditLog.map((l) => (
+            <div key={l.id} className="flex justify-between border-b border-slate-50 pb-2 last:border-0">
+              <div><p className="font-medium text-slate-700">{l.event}</p><p className="text-xs text-slate-400">{l.detail}</p></div>
+              <p className="text-xs text-slate-400">{l.time}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const DASH_FAQS = [
+  { q: "How do I dispute a transaction?", a: "Open Support, choose \"Submit a dispute,\" select the transaction, and describe the issue. We'll create a case reference for tracking." },
+  { q: "How long do external transfers take?", a: "In a live system, external transfers typically settle within 1–2 business days. This demo settles them instantly for illustration." },
+  { q: "How do I close my account?", a: "Contact support to start account closure. Any remaining balance would be transferred to a linked external account first." },
+];
+
+function SupportTab({ session, setSession, pushToast, openChat }) {
+  const [form, setForm] = useState({ subject: "Account support", message: "" });
+  const [dispute, setDispute] = useState(false);
+  const [disputeForm, setDisputeForm] = useState({ txnId: session.transactions[0]?.id || "", reason: "Unrecognized charge", details: "" });
+
+  function submit(e) {
+    e.preventDefault();
+    if (form.message.trim().length < 5) { pushToast("Add a few details about your request.", "error"); return; }
+    setSession((s) => ({ ...s, requests: [{ id: uid("req"), subject: form.subject, status: "Open", time: "Just now" }, ...s.requests] }));
+    pushToast("Support request submitted.");
+    setForm({ subject: "Account support", message: "" });
+  }
+  function submitDispute(e) {
+    e.preventDefault();
+    setSession((s) => ({ ...s, requests: [{ id: uid("req"), subject: `Dispute: ${disputeForm.reason}`, status: "Open", time: "Just now" }, ...s.requests] }));
+    pushToast("Dispute submitted — we'll follow up by email.");
+    setDispute(false);
+  }
+
+  return (
+    <div className="max-w-2xl space-y-6">
+      <h1 className="f-display text-2xl font-bold text-slate-900">Support</h1>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <button onClick={openChat} className="rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-teal-300"><MessageCircle className="mx-auto mb-2 text-teal-600" size={20} /><p className="text-sm font-semibold">Live chat</p></button>
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 text-center"><Phone className="mx-auto mb-2 text-teal-600" size={20} /><p className="text-sm font-semibold">1-800-555-0130</p></div>
+        <button onClick={() => setDispute(true)} className="rounded-2xl border border-slate-200 bg-white p-4 text-center hover:border-teal-300"><ReceiptText className="mx-auto mb-2 text-teal-600" size={20} /><p className="text-sm font-semibold">Submit a dispute</p></button>
+      </div>
+
+      <Accordion items={DASH_FAQS} />
+
+      <form onSubmit={submit} className="space-y-4 rounded-2xl border border-slate-200 bg-white p-5">
+        <p className="font-semibold text-slate-900">Contact support</p>
+        <Field label="Subject">
+          <Select value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })}>
+            <option>Account support</option><option>Card issue</option><option>Transfer issue</option><option>Loan question</option>
+          </Select>
+        </Field>
+        <Field label="Message" required>
+          <textarea rows={3} className={inputCls()} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} placeholder="Describe your issue" />
+        </Field>
+        <Btn type="submit">Send request</Btn>
+      </form>
+
+      {session.requests.length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5">
+          <p className="mb-3 font-semibold text-slate-900">Your requests</p>
+          <div className="space-y-2 text-sm">
+            {session.requests.map((r) => (
+              <div key={r.id} className="flex items-center justify-between border-b border-slate-50 pb-2 last:border-0">
+                <p className="font-medium text-slate-700">{r.subject}</p>
+                <div className="flex items-center gap-2"><Badge tone="amber">{r.status}</Badge><span className="text-xs text-slate-400">{r.time}</span></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <Modal open={dispute} onClose={() => setDispute(false)} title="Submit a dispute">
+        <form onSubmit={submitDispute} className="space-y-4">
+          <Field label="Transaction">
+            <Select value={disputeForm.txnId} onChange={(e) => setDisputeForm({ ...disputeForm, txnId: e.target.value })}>
+              {session.transactions.slice(0, 15).map((t) => <option key={t.id} value={t.id}>{t.description} — {fmt(t.amount)}</option>)}
+            </Select>
+          </Field>
+          <Field label="Reason">
+            <Select value={disputeForm.reason} onChange={(e) => setDisputeForm({ ...disputeForm, reason: e.target.value })}>
+              <option>Unrecognized charge</option><option>Incorrect amount</option><option>Duplicate charge</option><option>Service not received</option>
+            </Select>
+          </Field>
+          <Field label="Details"><textarea rows={3} className={inputCls()} value={disputeForm.details} onChange={(e) => setDisputeForm({ ...disputeForm, details: e.target.value })} /></Field>
+          <Btn type="submit" className="w-full">Submit dispute</Btn>
+        </form>
+      </Modal>
+    </div>
+  );
+}
+
+/* ============================== APP ROOT ============================== */
+function App() {
+  const [page, setPage] = useState("home");
+  const [users, setUsers] = useState([
+    { id: "demo", email: DEMO_EMAIL, password: DEMO_PASSWORD, firstName: "Jordan", lastName: "Blake", phone: "+233 20 555 0110", address: "12 Ledger Street, Accra, GH", occupation: "Employed", accountType: "Everyday Checking", mfaEnabled: true, isDemo: true },
+    { id: "kingsley", email: "kingsley43@gmail.com", password: "Kyeremeh43", firstName: "Kyeremeh", lastName: "Kingsley", phone: "+233 24 555 0199", address: "8 Harbor Close, Accra, GH", occupation: "Employed", accountType: "Growth Savings", mfaEnabled: false, isDemo: false, dataset: "kingsley" },
+  ]);
+  const [authProfile, setAuthProfile] = useState(null);
+  const [session, setSession] = useState(null);
+  const [pendingIntent, setPendingIntent] = useState(null);
+  const [loginPrefill, setLoginPrefill] = useState("");
+  const [toasts, setToasts] = useState([]);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  function pushToast(msg, type = "success") {
+    const id = uid("toast");
+    setToasts((t) => [...t, { id, msg, type }]);
+    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 3500);
+  }
+
+  function goto(p, intent, prefill) {
+    if (intent) setPendingIntent(intent);
+    if (prefill) setLoginPrefill(prefill);
+    setPage(p);
+    window.scrollTo({ top: 0, behavior: "instant" in window ? "instant" : "auto" });
+  }
+
+  function scrollTo(hash) {
+    if (page !== "home") { setPage("home"); setTimeout(() => document.querySelector(hash)?.scrollIntoView({ behavior: "smooth" }), 50); }
+    else document.querySelector(hash)?.scrollIntoView({ behavior: "smooth" });
+  }
+
+  function onLoginSuccess(user) {
+    setAuthProfile(user);
+    setSession(user.isDemo ? buildDemoData() : user.dataset === "kingsley" ? buildKingsleyData() : buildStarterData(user));
+    setPage("dashboard");
+    pushToast(`Welcome back, ${user.firstName}.`);
+  }
+
+  function onLogout() {
+    setAuthProfile(null);
+    setSession(null);
+    setPage("home");
+    pushToast("You've been signed out securely.");
+  }
+
+  const updateUserPassword = {
+    check: (pw) => authProfile && pw === (users.find((u) => u.id === authProfile.id)?.password),
+    set: (pw) => setUsers((us) => us.map((u) => u.id === authProfile.id ? { ...u, password: pw } : u)),
+  };
+
+  return (
+    <div className="f-body min-h-screen bg-white text-slate-900 antialiased">
+      <FontImport />
+      {page !== "dashboard" && <DemoBanner />}
+      {page !== "dashboard" && <NavBar goto={goto} onNavClick={scrollTo} />}
+
+      {page === "home" && <HomePage goto={goto} pushToast={pushToast} openChat={() => setChatOpen(true)} />}
+      {page === "login" && <LoginPage goto={goto} users={users} onSuccess={onLoginSuccess} prefillEmail={loginPrefill} pushToast={pushToast} />}
+      {page === "register" && <RegisterPage goto={goto} users={users} setUsers={setUsers} pushToast={pushToast} />}
+      {page === "dashboard" && session && (
+        <Dashboard
+          profile={authProfile}
+          session={session}
+          setSession={setSession}
+          onLogout={onLogout}
+          initialTab={pendingIntent === "transfers" ? "transfers" : pendingIntent === "cards" ? "cards" : pendingIntent === "loans" ? "overview" : "overview"}
+          pushToast={pushToast}
+          openChat={() => setChatOpen(true)}
+          updateUserPassword={updateUserPassword}
+        />
+      )}
+
+      {page !== "dashboard" && <Footer goto={goto} scrollTo={scrollTo} />}
+      <SupportChat open={chatOpen} onClose={() => setChatOpen(false)} />
+      <ToastHost toasts={toasts} />
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+
+</script>
+</body>
+</html>
